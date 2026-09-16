@@ -1,0 +1,278 @@
+@page
+@model DriversModel
+@{
+    ViewData["Title"] = "Driver Management";
+    ViewData["ActiveNav"] = "drivers";
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+    (string cls, string label) ExpiryPill(DateOnly expiry)
+    {
+        var days = expiry.DayNumber - today.DayNumber;
+        if (days < 0) return ("pill-critical", "Expired");
+        if (days <= 30) return ("pill-warning", $"{days}d left");
+        return ("pill-good", "Valid");
+    }
+    string StatusClass(string status) => status switch
+    {
+        "Active" => "pill-good", "On Trip" => "pill-info", "Off Duty" => "pill-neutral", _ => "pill-critical",
+    };
+    string[] statuses = ["All", "Active", "On Trip", "Off Duty", "Suspended"];
+    string[] depots = ["All", "Central Garage", "North Depot", "Riverside Yard", "Harbor Terminal"];
+}
+
+@if (Model.DeleteError != null)
+{
+    <div class="pill pill-critical" style="margin-bottom:16px; padding:8px 12px;">@Html.Raw(IconLibrary.Get("alert-triangle")) @Model.DeleteError</div>
+}
+
+<div class="page-header">
+    <div>
+        <div class="crumb">@Html.Raw(IconLibrary.Get("driver")) Fleet Operations</div>
+        <h1>Driver Management</h1>
+        <div class="page-header__meta">
+            <span>@Model.TotalCount drivers on roster</span> · <span>@Model.OnTripCount on trip now</span> · <span style="color:var(--status-warning);">@Model.ExpiringLicenses licenses expiring within 30 days</span>
+        </div>
+    </div>
+    <div class="page-header__actions">
+        <a class="btn btn-secondary" href="?handler=Export&Search=@Model.Search&StatusFilter=@Model.StatusFilter&DepotFilter=@Model.DepotFilter">@Html.Raw(IconLibrary.Get("download")) Export</a>
+        <button class="btn btn-primary" data-drawer-open="drawer-add-driver">@Html.Raw(IconLibrary.Get("plus")) Add driver</button>
+    </div>
+</div>
+
+<div class="grid grid-12" style="margin-bottom:18px;">
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Total drivers</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("driver"))</div></div>
+        <div class="stat-tile__value tabular">@Model.TotalCount</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">On trip now</span><div class="stat-tile__icon" style="background:var(--accent-blue-tint); color:var(--accent-blue-600);">@Html.Raw(IconLibrary.Get("route"))</div></div>
+        <div class="stat-tile__value tabular">@Model.OnTripCount</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Avg. safety score</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("shield"))</div></div>
+        <div class="stat-tile__value tabular">@Model.AvgSafety.ToString("0.0")</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Licenses expiring</span><div class="stat-tile__icon" style="background:var(--status-warning-tint); color:var(--status-warning);">@Html.Raw(IconLibrary.Get("id"))</div></div>
+        <div class="stat-tile__value tabular">@Model.ExpiringLicenses</div>
+    </div>
+</div>
+
+<div class="card card-pad" style="margin-bottom:18px;">
+    <form method="get" class="toolbar" style="margin-bottom:0;">
+        <label class="search-field" style="width:280px;">
+            @Html.Raw(IconLibrary.Get("search"))
+            <input type="text" name="Search" value="@Model.Search" placeholder="Search name, license number, phone…" />
+        </label>
+        @foreach (var s in statuses)
+        {
+            var isActive = (Model.StatusFilter ?? "All") == s;
+            <a class="chip @(isActive ? "active" : "")" href="?Search=@Model.Search&StatusFilter=@s&DepotFilter=@Model.DepotFilter">@s</a>
+        }
+        <div class="toolbar-spacer"></div>
+        <select class="select" name="DepotFilter" style="width:170px;" onchange="this.form.submit()">
+            @foreach (var d in depots)
+            {
+                <option value="@d" selected="@(d == (Model.DepotFilter ?? "All"))">@(d == "All" ? "All depots" : d)</option>
+            }
+        </select>
+    </form>
+</div>
+
+<div class="grid grid-12">
+    @if (Model.Drivers.Count == 0)
+    {
+        <div class="card card-pad col-12"><div class="empty-state">@Html.Raw(IconLibrary.Get("driver"))<strong>No drivers match these filters</strong></div></div>
+    }
+    @foreach (var d in Model.Drivers)
+    {
+        var (lc, ll) = ExpiryPill(d.LicenseExpiry);
+        var assigned = Model.AssignedVehicleByDriver.GetValueOrDefault(d.Id);
+        <div class="card card-pad col-4">
+            <div style="display:flex; align-items:flex-start; gap:12px;">
+                <div class="avatar lg">@d.Initials</div>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:700; font-size:14.5px;" class="truncate">@d.Name</div>
+                    <div class="text-muted" style="font-size:12px;">@d.LicenseClass</div>
+                </div>
+                <span class="pill @StatusClass(d.Status)"><span class="dot"></span>@d.Status</span>
+            </div>
+
+            <div class="grid" style="grid-template-columns:1fr 1fr; gap:10px; margin:16px 0;">
+                <div><div class="eyebrow">Assigned vehicle</div><div class="mono" style="font-size:12.5px; margin-top:2px;">@(assigned?.PlateNumber ?? "Unassigned")</div></div>
+                <div><div class="eyebrow">Depot</div><div style="font-size:12.5px; margin-top:2px; font-weight:600;">@d.Depot</div></div>
+                <div><div class="eyebrow">Trips completed</div><div class="mono" style="font-size:12.5px; margin-top:2px;">@d.TripsCompleted.ToString("N0")</div></div>
+                <div><div class="eyebrow">Experience</div><div style="font-size:12.5px; margin-top:2px; font-weight:600;">@d.YearsExperience yrs</div></div>
+            </div>
+
+            <div style="margin-bottom:14px;">
+                <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:5px;">
+                    <span class="text-muted" style="font-weight:650; text-transform:uppercase; letter-spacing:.04em; font-size:10.5px;">Safety score</span>
+                    <span class="mono" style="font-weight:700;">@d.SafetyScore.ToString("0")/100</span>
+                </div>
+                <div class="meter @(d.SafetyScore < 75 ? "critical" : d.SafetyScore < 90 ? "warning" : "")"><div class="meter__fill" style="width:@(d.SafetyScore)%;"></div></div>
+            </div>
+
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span class="pill @lc">License: @ll</span>
+                <button class="btn btn-secondary btn-sm" data-drawer-open="drawer-@d.Id">View profile</button>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="drawer-overlay" data-drawer-overlay></div>
+
+@foreach (var d in Model.Drivers)
+{
+    var (lc, ll) = ExpiryPill(d.LicenseExpiry);
+    var trips = Model.RecentTripsByDriver.GetValueOrDefault(d.Id, []);
+    var tabsId = "dtabs-" + d.Id;
+    var starCount = (int)Math.Round(d.Rating);
+    var assigned = Model.AssignedVehicleByDriver.GetValueOrDefault(d.Id);
+    <div class="drawer" id="drawer-@d.Id">
+        <div class="drawer-head">
+            <div>
+                <div style="font-size:11px; font-weight:700; letter-spacing:.04em; color:var(--ink-3); text-transform:uppercase;">Driver profile</div>
+                <div style="font-size:18px; font-weight:800;">@d.Name</div>
+            </div>
+            <button class="icon-btn" data-drawer-close aria-label="Close">@Html.Raw(IconLibrary.Get("x"))</button>
+        </div>
+        <div class="drawer-body">
+            <div style="display:flex; align-items:center; gap:14px; margin-bottom:18px;">
+                <div class="avatar lg">@d.Initials</div>
+                <div>
+                    <div style="font-weight:700; font-size:15px;">@d.Name</div>
+                    <div class="text-muted" style="font-size:12.5px;">@d.LicenseClass · License @d.LicenseNumber</div>
+                </div>
+                <span class="pill @StatusClass(d.Status)" style="margin-left:auto;"><span class="dot"></span>@d.Status</span>
+            </div>
+
+            <div class="tabs" data-tabs="@tabsId">
+                <button type="button" class="tab-btn active" data-tab="overview">Overview</button>
+                <button type="button" class="tab-btn" data-tab="performance">Performance</button>
+                <button type="button" class="tab-btn" data-tab="trips">Recent trips</button>
+            </div>
+
+            <form method="post" asp-page-handler="Edit" asp-route-id="@d.Id">
+                <input type="hidden" name="Search" value="@Model.Search" /><input type="hidden" name="StatusFilter" value="@Model.StatusFilter" /><input type="hidden" name="DepotFilter" value="@Model.DepotFilter" />
+                <div data-tab-panel-group="@tabsId" data-tab-panel="overview" class="tab-panel active">
+                    <div class="form-row" style="margin-bottom:14px;">
+                        <div class="field"><label>Phone</label><input class="input" name="phone" value="@d.Phone" /></div>
+                        <div class="field"><label>Email</label><input class="input" type="email" name="email" value="@d.Email" /></div>
+                    </div>
+                    <div class="form-row" style="margin-bottom:14px;">
+                        <div class="field"><label>Status</label>
+                            <select class="select" name="status">
+                                @foreach (var s in new[] { "Active", "On Trip", "Off Duty", "Suspended" }) { <option selected="@(s == d.Status)">@s</option> }
+                            </select>
+                        </div>
+                        <div class="field"><label>Depot</label>
+                            <select class="select" name="depot">
+                                @foreach (var dep in new[] { "Central Garage", "North Depot", "Riverside Yard", "Harbor Terminal" }) { <option selected="@(dep == d.Depot)">@dep</option> }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row" style="margin-bottom:14px;">
+                        <div class="field"><label>Years experience</label><input class="input" type="number" name="yearsExperience" value="@d.YearsExperience" /></div>
+                        <div class="field"><label>License expiry</label><input class="input" type="date" name="licenseExpiry" value="@d.LicenseExpiry.ToString("yyyy-MM-dd")" /></div>
+                    </div>
+                    <div class="field" style="margin-bottom:14px;">
+                        <label>Safety score</label>
+                        <input class="input mono" type="number" min="0" max="100" name="safetyScore" value="@d.SafetyScore.ToString("0")" />
+                    </div>
+                    <div class="doc-row">
+                        <div class="doc-row__icon">@Html.Raw(IconLibrary.Get("id"))</div>
+                        <div style="flex:1;">
+                            <div style="font-size:13px; font-weight:650;">Driving license</div>
+                            <div class="text-muted" style="font-size:11.5px;">Assigned vehicle: @(assigned?.PlateNumber ?? "Unassigned")</div>
+                        </div>
+                        <span class="pill @lc">@ll</span>
+                    </div>
+                </div>
+
+                <div data-tab-panel-group="@tabsId" data-tab-panel="performance" class="tab-panel">
+                    <div style="display:flex; gap:6px; margin-bottom:16px;">
+                        @for (int s = 1; s <= 5; s++)
+                        {
+                            <span style="color:@(s <= starCount ? "var(--status-warning)" : "var(--border-strong)");">@Html.Raw(IconLibrary.Get("star"))</span>
+                        }
+                        <span class="mono" style="font-size:12.5px; font-weight:700; margin-left:6px;">@d.Rating.ToString("0.0") / 5.0</span>
+                    </div>
+                    <div style="margin-bottom:16px;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;">
+                            <span class="text-muted" style="font-weight:650;">Safety score</span><span class="mono" style="font-weight:700;">@d.SafetyScore.ToString("0")/100</span>
+                        </div>
+                        <div class="meter @(d.SafetyScore < 75 ? "critical" : d.SafetyScore < 90 ? "warning" : "")"><div class="meter__fill" style="width:@(d.SafetyScore)%;"></div></div>
+                    </div>
+                    <div class="grid" style="grid-template-columns:1fr 1fr; gap:14px;">
+                        <div class="card card-pad" style="background:var(--surface-2); box-shadow:none;">
+                            <div class="eyebrow">Trips completed</div>
+                            <div style="font-size:22px; font-weight:800; margin-top:4px;" class="tabular">@d.TripsCompleted.ToString("N0")</div>
+                        </div>
+                        <div class="card card-pad" style="background:var(--surface-2); box-shadow:none;">
+                            <div class="eyebrow">Total distance</div>
+                            <div style="font-size:22px; font-weight:800; margin-top:4px;" class="tabular">@((d.TotalDistanceKm / 1000).ToString("0.#"))K <span style="font-size:12px;">km</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div data-tab-panel-group="@tabsId" data-tab-panel="trips" class="tab-panel">
+                    @if (trips.Count == 0)
+                    {
+                        <div class="empty-state">@Html.Raw(IconLibrary.Get("route"))<strong>No recent trips</strong><span>Trip history will appear here once assigned.</span></div>
+                    }
+                    else
+                    {
+                        <div class="timeline">
+                            @foreach (var t in trips)
+                            {
+                                <div class="timeline-item">
+                                    <div class="timeline-item__icon" style="background:var(--brand-50); color:var(--brand-600);">@Html.Raw(IconLibrary.Get("route"))</div>
+                                    <div class="timeline-item__body">
+                                        <p style="font-weight:600;">@t.Origin → @t.Destination</p>
+                                        <time>@t.StartTime.ToString("MMM d, HH:mm") · @t.DistanceKm.ToString("0.#") km · @t.Status</time>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block btn-lg" style="margin-top:18px;">@Html.Raw(IconLibrary.Get("check-circle")) Save changes</button>
+            </form>
+            <form method="post" asp-page-handler="Delete" asp-route-id="@d.Id" onsubmit="return confirm('Remove @d.Name from the roster?');" style="margin-top:10px;">
+                <button type="submit" class="btn btn-danger btn-block">@Html.Raw(IconLibrary.Get("trash")) Remove driver</button>
+            </form>
+        </div>
+    </div>
+}
+
+<div class="drawer" id="drawer-add-driver">
+    <div class="drawer-head">
+        <div style="font-size:16px; font-weight:800;">Add driver</div>
+        <button class="icon-btn" data-drawer-close aria-label="Close">@Html.Raw(IconLibrary.Get("x"))</button>
+    </div>
+    <div class="drawer-body">
+        <form class="auth-form" method="post" asp-page-handler="Add">
+            <div class="form-row">
+                <div class="field"><label>Full name</label><input class="input" name="name" placeholder="Jordan Blake" required /></div>
+                <div class="field"><label>License class</label>
+                    <select class="select" name="licenseClass"><option>Class B (Transit)</option><option>Class B (Heavy)</option><option>Class C</option><option>Class M</option></select>
+                </div>
+            </div>
+            <div class="field"><label>License number</label><input class="input mono" name="licenseNumber" placeholder="DL-00000" required /></div>
+            <div class="form-row">
+                <div class="field"><label>Phone</label><input class="input" name="phone" placeholder="(415) 555-0100" required /></div>
+                <div class="field"><label>Email</label><input class="input" type="email" name="email" placeholder="name@mmta.gov" required /></div>
+            </div>
+            <div class="form-row">
+                <div class="field"><label>Depot</label>
+                    <select class="select" name="depot"><option>Central Garage</option><option>North Depot</option><option>Riverside Yard</option><option>Harbor Terminal</option></select>
+                </div>
+                <div class="field"><label>License expiry</label><input class="input" type="date" name="licenseExpiry" required /></div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block btn-lg">@Html.Raw(IconLibrary.Get("check-circle")) Save driver</button>
+        </form>
+    </div>
+</div>

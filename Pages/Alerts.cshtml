@@ -1,0 +1,120 @@
+@page
+@model AlertsModel
+@{
+    ViewData["Title"] = "Alerts & Notifications";
+    ViewData["ActiveNav"] = "alerts";
+    string[] types = ["All", "Overspeeding", "LowFuel", "MaintenanceDue", "Offline", "Accident", "GeofenceExit", "DocumentExpiry"];
+
+    (string stripe, string pill, string tint, string fg) SeverityStyle(string sev) => sev switch
+    {
+        "Critical" => ("var(--status-critical)", "pill-critical", "var(--status-critical-tint)", "var(--status-critical)"),
+        "Serious" => ("var(--status-serious)", "pill-serious", "var(--status-serious-tint)", "var(--status-serious)"),
+        "Warning" => ("var(--status-warning)", "pill-warning", "var(--status-warning-tint)", "var(--status-warning)"),
+        _ => ("var(--status-good)", "pill-good", "var(--status-good-tint)", "var(--status-good)"),
+    };
+    string TypeIcon(string t) => t switch
+    {
+        "Overspeeding" => "gauge", "LowFuel" => "fuel", "MaintenanceDue" => "wrench", "Offline" => "signal",
+        "Accident" => "alert-octagon", "GeofenceExit" => "target", "DocumentExpiry" => "file-text", _ => "alert-triangle",
+    };
+    string TypeLabel(string t) => t switch
+    {
+        "Overspeeding" => "Overspeeding", "LowFuel" => "Low fuel", "MaintenanceDue" => "Maintenance due", "Offline" => "Vehicle offline",
+        "Accident" => "Possible accident", "GeofenceExit" => "Geofence exit", "DocumentExpiry" => "Document expiry", _ => t,
+    };
+    string StatusPill(string s) => s switch { "New" => "pill-info", "Acknowledged" => "pill-warning", _ => "pill-good" };
+}
+
+<div class="page-header">
+    <div>
+        <div class="crumb">@Html.Raw(IconLibrary.Get("bell")) Intelligence</div>
+        <h1>Alerts &amp; Notifications</h1>
+        <div class="page-header__meta"><span>@Model.Alerts.Count(a => a.Status != "Resolved") open alerts</span> · <span>Live monitoring, SQL Server-backed</span></div>
+    </div>
+    <div class="page-header__actions">
+        <a class="btn btn-secondary" href="/Settings?tab=notifications">@Html.Raw(IconLibrary.Get("settings")) Alert rules</a>
+        <form method="post" asp-page-handler="AcknowledgeAll"><button type="submit" class="btn btn-secondary">@Html.Raw(IconLibrary.Get("check-circle")) Acknowledge all</button></form>
+    </div>
+</div>
+
+<div class="grid grid-12" style="margin-bottom:18px;">
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Critical</span><div class="stat-tile__icon" style="background:var(--status-critical-tint); color:var(--status-critical);">@Html.Raw(IconLibrary.Get("alert-octagon"))</div></div>
+        <div class="stat-tile__value tabular">@Model.CriticalCount</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Serious</span><div class="stat-tile__icon" style="background:var(--status-serious-tint); color:var(--status-serious);">@Html.Raw(IconLibrary.Get("alert-triangle"))</div></div>
+        <div class="stat-tile__value tabular">@Model.SeriousCount</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Warning</span><div class="stat-tile__icon" style="background:var(--status-warning-tint); color:var(--status-warning);">@Html.Raw(IconLibrary.Get("info"))</div></div>
+        <div class="stat-tile__value tabular">@Model.WarningCount</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Resolved</span><div class="stat-tile__icon" style="background:var(--status-good-tint); color:var(--status-good);">@Html.Raw(IconLibrary.Get("check-circle"))</div></div>
+        <div class="stat-tile__value tabular">@Model.ResolvedCount</div>
+    </div>
+</div>
+
+<div class="card card-pad">
+    <div class="toolbar">
+        @foreach (var t in types)
+        {
+            var isActive = (Model.TypeFilter ?? "All") == t;
+            <a class="chip @(isActive ? "active" : "")" href="?TypeFilter=@t&StatusFilter=@Model.StatusFilter">@(t == "All" ? "All types" : TypeLabel(t))</a>
+        }
+        <div class="toolbar-spacer"></div>
+        <form method="get">
+            <input type="hidden" name="TypeFilter" value="@Model.TypeFilter" />
+            <select class="select" name="StatusFilter" style="width:150px;" onchange="this.form.submit()">
+                @foreach (var s in new[] { "All", "New", "Acknowledged", "Resolved" })
+                {
+                    <option value="@s" selected="@(s == (Model.StatusFilter ?? "All"))">@(s == "All" ? "All statuses" : s)</option>
+                }
+            </select>
+        </form>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:10px;">
+        @if (Model.Alerts.Count == 0)
+        {
+            <div class="empty-state">@Html.Raw(IconLibrary.Get("bell"))<strong>No alerts match these filters</strong></div>
+        }
+        @foreach (var a in Model.Alerts)
+        {
+            var (stripe, pillCls, tint, fg) = SeverityStyle(a.Severity);
+            <div style="display:flex; gap:14px; padding:14px 16px; border:1px solid var(--border); border-left:4px solid @stripe; border-radius:var(--radius-md); background:var(--surface);">
+                <div style="width:38px; height:38px; border-radius:10px; flex:none; display:flex; align-items:center; justify-content:center; background:@tint; color:@fg;">@Html.Raw(IconLibrary.Get(TypeIcon(a.Type)))</div>
+                <div style="flex:1; min-width:0;">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span style="font-weight:700; font-size:13.5px;">@TypeLabel(a.Type)</span>
+                        <span class="pill @pillCls">@a.Severity</span>
+                        <span class="pill @StatusPill(a.Status)">@a.Status</span>
+                    </div>
+                    <p style="font-size:13px; color:var(--ink-2); margin-top:4px;">@a.Message</p>
+                    <div style="display:flex; align-items:center; gap:14px; margin-top:8px; font-size:11.5px; color:var(--ink-3); flex-wrap:wrap;">
+                        <span class="mono">@a.Vehicle?.PlateNumber</span>
+                        @if (a.Driver != null) { <span>@a.Driver.Name</span> }
+                        <span>@a.Location</span>
+                        <span class="mono">@a.Timestamp.ToString("MMM d, HH:mm")</span>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px; flex:none;">
+                    @if (a.Status == "New")
+                    {
+                        <form method="post" asp-page-handler="SetStatus" asp-route-id="@a.Id"><input type="hidden" name="status" value="Acknowledged" /><button type="submit" class="btn btn-secondary btn-sm">Acknowledge</button></form>
+                        <form method="post" asp-page-handler="SetStatus" asp-route-id="@a.Id"><input type="hidden" name="status" value="Resolved" /><button type="submit" class="btn btn-primary btn-sm">Resolve</button></form>
+                    }
+                    else if (a.Status == "Acknowledged")
+                    {
+                        <form method="post" asp-page-handler="SetStatus" asp-route-id="@a.Id"><input type="hidden" name="status" value="Resolved" /><button type="submit" class="btn btn-primary btn-sm">Resolve</button></form>
+                    }
+                    else
+                    {
+                        <span class="text-muted" style="font-size:11.5px;">Closed</span>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>

@@ -1,0 +1,158 @@
+@page
+@model MaintenanceModel
+@{
+    ViewData["Title"] = "Maintenance Management";
+    ViewData["ActiveNav"] = "maintenance";
+    string[] statuses = ["All", "Scheduled", "In Progress", "Completed", "Overdue"];
+    string[] categories = ["All", "Scheduled", "Repair", "Inspection"];
+
+    string StatusClass(string s) => s switch
+    {
+        "Completed" => "pill-good", "Scheduled" => "pill-info", "In Progress" => "pill-warning", _ => "pill-critical",
+    };
+    string CategoryIcon(string c) => c switch { "Repair" => "wrench", "Inspection" => "check-circle", _ => "calendar" };
+}
+
+<div class="page-header">
+    <div>
+        <div class="crumb">@Html.Raw(IconLibrary.Get("wrench")) Fleet Operations</div>
+        <h1>Maintenance Management</h1>
+        <div class="page-header__meta"><span>@Model.Records.Count records shown</span> · <span style="color:var(--status-critical);">@Model.OverdueCount overdue</span></div>
+    </div>
+    <div class="page-header__actions">
+        <a class="btn btn-secondary" href="?handler=Export&StatusFilter=@Model.StatusFilter&CategoryFilter=@Model.CategoryFilter">@Html.Raw(IconLibrary.Get("download")) Export</a>
+        <button class="btn btn-primary" data-drawer-open="drawer-schedule-maint">@Html.Raw(IconLibrary.Get("plus")) Schedule maintenance</button>
+    </div>
+</div>
+
+<div class="grid grid-12" style="margin-bottom:18px;">
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Overdue</span><div class="stat-tile__icon" style="background:var(--status-critical-tint); color:var(--status-critical);">@Html.Raw(IconLibrary.Get("alert-triangle"))</div></div>
+        <div class="stat-tile__value tabular">@Model.OverdueCount</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">In progress</span><div class="stat-tile__icon" style="background:var(--status-warning-tint); color:var(--status-warning);">@Html.Raw(IconLibrary.Get("wrench"))</div></div>
+        <div class="stat-tile__value tabular">@Model.InProgressCount</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Scheduled</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("calendar"))</div></div>
+        <div class="stat-tile__value tabular">@Model.ScheduledCount</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Cost (MTD)</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("credit-card"))</div></div>
+        <div class="stat-tile__value tabular">$@Model.MtdCost.ToString("N0")</div>
+    </div>
+</div>
+
+<div class="grid grid-12" style="margin-bottom:18px;">
+    <div class="card card-pad col-12">
+        <div class="panel-head"><div><div class="panel-title">Upcoming &amp; overdue service</div><div class="panel-sub">Sorted by urgency</div></div></div>
+        <div class="grid grid-12">
+            @foreach (var v in Model.UpcomingService)
+            {
+                var daysLeft = v.NextServiceDue.DayNumber - DateOnly.FromDateTime(DateTime.UtcNow).DayNumber;
+                var urgent = daysLeft < 0;
+                var soon = daysLeft is >= 0 and <= 14;
+                <div class="col-3" style="padding:14px; border-radius:var(--radius-md); border:1px solid var(--border); @(urgent ? "background:var(--status-critical-tint);" : soon ? "background:var(--status-warning-tint);" : "")">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span class="mono row-primary" style="font-size:13px;">@v.PlateNumber</span>
+                        <span class="pill @(urgent ? "pill-critical" : soon ? "pill-warning" : "pill-neutral")">@(urgent ? "Overdue" : soon ? "Due soon" : "Scheduled")</span>
+                    </div>
+                    <div class="text-muted" style="font-size:12px; margin-top:6px;">@v.Make @v.Model</div>
+                    <div style="font-size:12.5px; font-weight:650; margin-top:8px;">@v.NextServiceDue.ToString("MMM d, yyyy")</div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="card card-pad">
+    <div class="toolbar">
+        @foreach (var s in statuses)
+        {
+            var isActive = (Model.StatusFilter ?? "All") == s;
+            <a class="chip @(isActive ? "active" : "")" href="?StatusFilter=@s&CategoryFilter=@Model.CategoryFilter">@s</a>
+        }
+        <div class="toolbar-spacer"></div>
+        <form method="get">
+            <input type="hidden" name="StatusFilter" value="@Model.StatusFilter" />
+            <select class="select" name="CategoryFilter" style="width:160px;" onchange="this.form.submit()">
+                @foreach (var c in categories)
+                {
+                    <option value="@c" selected="@(c == (Model.CategoryFilter ?? "All"))">@(c == "All" ? "All categories" : c)</option>
+                }
+            </select>
+        </form>
+    </div>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Vehicle</th><th>Service</th><th>Category</th><th>Status</th><th>Date</th><th>Workshop</th><th class="num">Cost</th><th></th></tr></thead>
+            <tbody>
+                @if (Model.Records.Count == 0)
+                {
+                    <tr><td colspan="8"><div class="empty-state">@Html.Raw(IconLibrary.Get("wrench"))<strong>No maintenance records match these filters</strong></div></td></tr>
+                }
+                @foreach (var m in Model.Records)
+                {
+                    <tr>
+                        <td class="row-primary mono">@m.Vehicle?.PlateNumber</td>
+                        <td>
+                            <div class="row-flag">
+                                <div class="row-flag__icon">@Html.Raw(IconLibrary.Get(CategoryIcon(m.Category)))</div>
+                                <div class="row-flag__meta">
+                                    <span class="row-primary" style="font-size:13px;">@m.ServiceType</span>
+                                    <span>@m.PartsReplaced</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="pill pill-neutral">@m.Category</span></td>
+                        <td><span class="pill @StatusClass(m.Status)">@m.Status</span></td>
+                        <td class="mono" style="font-size:12.5px;">@m.Date.ToString("MMM d, yyyy")</td>
+                        <td style="font-size:12.5px;">@m.Workshop</td>
+                        <td class="num mono">@(m.Cost > 0 ? "$" + m.Cost.ToString("N0") : "—")</td>
+                        <td>
+                            <div class="row-actions">
+                                @if (m.Status != "Completed")
+                                {
+                                    <form method="post" asp-page-handler="SetStatus" asp-route-id="@m.Id"><input type="hidden" name="status" value="Completed" /><button class="btn btn-secondary btn-sm" type="submit">Mark done</button></form>
+                                }
+                                <form method="post" asp-page-handler="Delete" asp-route-id="@m.Id" onsubmit="return confirm('Delete this maintenance record?');"><button class="icon-btn btn-icon-only" type="submit" title="Delete">@Html.Raw(IconLibrary.Get("trash"))</button></form>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="drawer-overlay" data-drawer-overlay></div>
+<div class="drawer" id="drawer-schedule-maint">
+    <div class="drawer-head">
+        <div style="font-size:16px; font-weight:800;">Schedule maintenance</div>
+        <button class="icon-btn" data-drawer-close aria-label="Close">@Html.Raw(IconLibrary.Get("x"))</button>
+    </div>
+    <div class="drawer-body">
+        <form class="auth-form" method="post" asp-page-handler="Add">
+            <div class="field"><label>Vehicle</label>
+                <select class="select" name="vehicleId">
+                    @foreach (var v in Model.AllVehicles)
+                    {
+                        <option value="@v.Id">@v.PlateNumber — @v.Make @v.Model</option>
+                    }
+                </select>
+            </div>
+            <div class="field"><label>Service type</label><input class="input" name="serviceType" placeholder="e.g. Oil & filter change" required /></div>
+            <div class="form-row">
+                <div class="field"><label>Category</label><select class="select" name="category"><option>Scheduled</option><option>Repair</option><option>Inspection</option></select></div>
+                <div class="field"><label>Workshop</label><select class="select" name="workshop"><option>Central Garage EV Bay</option><option>North Depot Bay 1</option><option>Riverside Fleet Workshop</option><option>Harbor Terminal Bay</option></select></div>
+            </div>
+            <div class="form-row">
+                <div class="field"><label>Date</label><input class="input" type="date" name="date" required /></div>
+                <div class="field"><label>Estimated cost</label><input class="input" type="number" step="0.01" name="cost" placeholder="150.00" /></div>
+            </div>
+            <div class="field"><label>Notes</label><textarea class="textarea" name="notes" rows="3" placeholder="Parts needed, technician notes…"></textarea></div>
+            <button type="submit" class="btn btn-primary btn-block btn-lg">@Html.Raw(IconLibrary.Get("check-circle")) Schedule service</button>
+        </form>
+    </div>
+</div>

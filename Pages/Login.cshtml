@@ -1,0 +1,63 @@
+@page
+@model LoginModel
+@{
+    ViewData["Title"] = "Sign in";
+    Layout = "_AuthLayout";
+}
+
+<div class="auth-card__head">
+    <h1>Sign in to VMS</h1>
+    <p>Enter your agency credentials to access the fleet console.</p>
+</div>
+
+@if (Model.ResetSuccess)
+{
+    <div class="pill pill-good" style="margin-bottom:16px; padding:8px 12px;">
+        @Html.Raw(IconLibrary.Get("check-circle")) Password reset successfully — sign in with your new password.
+    </div>
+}
+@if (Model.Error != null)
+{
+    <div class="pill pill-critical" style="margin-bottom:16px; padding:8px 12px;">
+        @Html.Raw(IconLibrary.Get("alert-triangle")) @Model.Error
+    </div>
+}
+
+<form class="auth-form" method="post">
+    <div class="field">
+        <label for="email">Work email</label>
+        <div class="input-icon-wrap">
+            @Html.Raw(IconLibrary.Get("mail"))
+            <input class="input" type="email" id="email" name="Email" value="@Model.Email" placeholder="you@agency.gov" required autofocus />
+        </div>
+    </div>
+    <div class="field">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+            <label for="password">Password</label>
+            <a href="/ForgotPassword" style="font-size:12.5px; font-weight:650; color:var(--brand-600);">Forgot password?</a>
+        </div>
+        <div class="input-icon-wrap">
+            @Html.Raw(IconLibrary.Get("lock"))
+            <input class="input" type="password" id="password" name="Password" placeholder="••••••••••" required />
+            <button type="button" class="toggle-visibility" data-toggle-visibility="password" aria-label="Show password">
+                @Html.Raw(IconLibrary.Get("eye"))
+            </button>
+        </div>
+    </div>
+    <label class="checkbox-row">
+        <input type="checkbox" name="Remember" value="true" checked />
+        Keep me signed in on this device
+    </label>
+    <button type="submit" class="btn btn-primary btn-lg btn-block">
+        Sign in
+        @Html.Raw(IconLibrary.Get("arrow-up-right"))
+    </button>
+    <div class="auth-divider">or</div>
+    <button type="button" class="btn btn-secondary btn-lg btn-block">
+        @Html.Raw(IconLibrary.Get("shield"))
+        Continue with Agency SSO
+    </button>
+</form>
+
+<p class="auth-foot-link">Need access? <a href="mailto:fleetadmin@mmta.gov">Contact your fleet administrator</a></p>
+<p class="auth-foot-link" style="margin-top:4px;">Demo credentials: any seeded @@mmta.gov email · password <code class="mono">FleetPulse@2026</code></p>

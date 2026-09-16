@@ -1,0 +1,166 @@
+@page
+@model UsersModel
+@{
+    ViewData["Title"] = "User & Role Management";
+    ViewData["ActiveNav"] = "users";
+
+    string StatusPill(string s) => s switch { "Active" => "pill-good", "Invited" => "pill-info", _ => "pill-critical" };
+
+    var roles = new[] { "System Administrator", "Fleet Manager", "Dispatcher", "Driver", "Auditor" };
+    var matrix = new (string Category, bool[] Access)[]
+    {
+        ("Vehicle records", new[] { true, true, true, false, true }),
+        ("Driver records", new[] { true, true, true, false, true }),
+        ("Trip planning", new[] { true, true, true, true, true }),
+        ("Fuel & maintenance logs", new[] { true, true, false, true, true }),
+        ("Analytics & reports", new[] { true, true, false, false, true }),
+        ("Alerts & notifications", new[] { true, true, true, false, true }),
+        ("Users & roles", new[] { true, false, false, false, false }),
+        ("System settings", new[] { true, false, false, false, false }),
+    };
+}
+
+<div class="page-header">
+    <div>
+        <div class="crumb">@Html.Raw(IconLibrary.Get("roles")) Administration</div>
+        <h1>User &amp; Role Management</h1>
+        <div class="page-header__meta"><span>@Model.Users.Count accounts</span> · <span>@Model.ActiveCount active</span> · <span>@Model.InvitedCount pending invitation</span></div>
+    </div>
+    <div class="page-header__actions">
+        <a class="btn btn-secondary" href="?handler=Export">@Html.Raw(IconLibrary.Get("download")) Export</a>
+        <button class="btn btn-primary" data-drawer-open="drawer-invite-user">@Html.Raw(IconLibrary.Get("plus")) Invite user</button>
+    </div>
+</div>
+
+@if (Model.RemoveError != null)
+{
+    <div class="pill pill-critical" style="margin-bottom:16px; padding:8px 12px;">@Html.Raw(IconLibrary.Get("alert-triangle")) @Model.RemoveError</div>
+}
+
+<div class="tabs" data-tabs="users">
+    <button type="button" class="tab-btn active" data-tab="accounts">User Accounts</button>
+    <button type="button" class="tab-btn" data-tab="roles">Roles &amp; Permissions</button>
+    <button type="button" class="tab-btn" data-tab="audit">Audit Log</button>
+</div>
+
+<div data-tab-panel-group="users" data-tab-panel="accounts" class="tab-panel active">
+    <div class="card card-pad">
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead><tr><th>User</th><th>Role</th><th>Department</th><th>Status</th><th>Last active</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var u in Model.Users)
+                    {
+                        <tr>
+                            <td>
+                                <div class="row-flag">
+                                    <div class="avatar">@u.Initials</div>
+                                    <div class="row-flag__meta">
+                                        <span class="row-primary">@u.Name</span>
+                                        <span>@u.Email</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <form method="post" asp-page-handler="SetRole" asp-route-id="@u.Id">
+                                    <select class="select" name="role" style="padding:4px 26px 4px 8px; font-size:11.5px;" onchange="this.form.submit()">
+                                        @foreach (var r in roles) { <option selected="@(r == u.Role)">@r</option> }
+                                    </select>
+                                </form>
+                            </td>
+                            <td style="font-size:12.5px;">@u.Department</td>
+                            <td><span class="pill @StatusPill(u.Status)">@u.Status</span></td>
+                            <td class="text-muted" style="font-size:12px;">@(u.LastActiveAt?.ToTimeAgo() ?? "Never")</td>
+                            <td>
+                                <div class="row-actions">
+                                    <form method="post" asp-page-handler="Remove" asp-route-id="@u.Id" onsubmit="return confirm('Remove @u.Name\'s account?');">
+                                        <button class="icon-btn btn-icon-only" type="submit" title="Remove">@Html.Raw(IconLibrary.Get("trash"))</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div data-tab-panel-group="users" data-tab-panel="roles" class="tab-panel">
+    <div class="card card-pad">
+        <div class="panel-head"><div><div class="panel-title">Permission matrix</div><div class="panel-sub">What each role can access across VMS</div></div></div>
+        <div class="table-wrap">
+            <table class="perm-grid">
+                <thead>
+                    <tr>
+                        <th>Module</th>
+                        @foreach (var r in roles) { <th>@r</th> }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in matrix)
+                    {
+                        <tr>
+                            <td>@row.Category</td>
+                            @foreach (var allowed in row.Access)
+                            {
+                                <td>
+                                    <span class="perm-check @(allowed ? "on" : "off")">
+                                        @Html.Raw(IconLibrary.Get(allowed ? "check" : "x"))
+                                    </span>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div data-tab-panel-group="users" data-tab-panel="audit" class="tab-panel">
+    <div class="card card-pad">
+        <div class="panel-head"><div><div class="panel-title">Audit log</div><div class="panel-sub">System &amp; user actions, most recent first</div></div></div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead><tr><th>Actor</th><th>Action</th><th>Target</th><th>Timestamp</th><th>IP address</th></tr></thead>
+                <tbody>
+                    @foreach (var log in Model.AuditLog)
+                    {
+                        <tr>
+                            <td class="row-primary">@log.Actor</td>
+                            <td style="font-size:12.5px;">@log.Action</td>
+                            <td class="mono" style="font-size:12.5px;">@log.Target</td>
+                            <td class="mono" style="font-size:12px;">@log.OccurredAt.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td class="mono text-muted" style="font-size:12px;">@log.IpAddress</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="drawer-overlay" data-drawer-overlay></div>
+<div class="drawer" id="drawer-invite-user">
+    <div class="drawer-head">
+        <div style="font-size:16px; font-weight:800;">Invite user</div>
+        <button class="icon-btn" data-drawer-close aria-label="Close">@Html.Raw(IconLibrary.Get("x"))</button>
+    </div>
+    <div class="drawer-body">
+        <form class="auth-form" method="post" asp-page-handler="Invite">
+            <div class="field"><label>Full name</label><input class="input" name="name" placeholder="Jordan Blake" required /></div>
+            <div class="field"><label>Work email</label><input class="input" type="email" name="email" placeholder="name@mmta.gov" required /></div>
+            <div class="form-row">
+                <div class="field"><label>Role</label>
+                    <select class="select" name="role">
+                        @foreach (var r in roles) { <option>@r</option> }
+                    </select>
+                </div>
+                <div class="field"><label>Department</label><input class="input" name="department" placeholder="Fleet Operations" required /></div>
+            </div>
+            <span class="hint">A temporary account is created immediately with status "Invited"; in production an email with a secure sign-up link would be sent.</span>
+            <button type="submit" class="btn btn-primary btn-block btn-lg">@Html.Raw(IconLibrary.Get("mail")) Send invitation</button>
+        </form>
+    </div>
+</div>

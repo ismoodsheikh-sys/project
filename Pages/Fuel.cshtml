@@ -1,0 +1,276 @@
+@page
+@model FuelModel
+@{
+    ViewData["Title"] = "Fuel Management";
+    ViewData["ActiveNav"] = "fuel";
+
+    var typeColors = new[] { "var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)" };
+    double totalTypeLiters = Model.ByType.Sum(t => t.Liters);
+    double rD = 54, cD = 2 * Math.PI * rD, cumD = 0;
+    var donutSegs = Model.ByType.Select((t, i) =>
+    {
+        double frac = totalTypeLiters == 0 ? 0 : t.Liters / totalTypeLiters;
+        double dash = frac * cD;
+        var seg = (t.Type, t.Liters, Color: typeColors[i % typeColors.Length], Dash: dash, Offset: -cumD, Pct: frac * 100);
+        cumD += dash;
+        return seg;
+    }).ToList();
+
+    var weekly = Model.WeeklyStats;
+    var weeklyCost = weekly.Select(w => w.FuelCost).ToArray();
+    double maxWk = weeklyCost.Length > 0 ? weeklyCost.Max() : 1;
+    string[] types = ["All", "Diesel", "Petrol", "Hybrid Petrol", "Electric (kWh)"];
+}
+
+<div class="page-header">
+    <div>
+        <div class="crumb">@Html.Raw(IconLibrary.Get("fuel")) Fleet Operations</div>
+        <h1>Fuel Management</h1>
+        <div class="page-header__meta"><span>@Model.Records.Count records shown</span> · <span>MMTA fuel program</span></div>
+    </div>
+    <div class="page-header__actions">
+        <a class="btn btn-secondary" href="?handler=Export&TypeFilter=@Model.TypeFilter">@Html.Raw(IconLibrary.Get("download")) Export</a>
+        <button class="btn btn-primary" data-drawer-open="drawer-log-fuel">@Html.Raw(IconLibrary.Get("plus")) Log fuel record</button>
+    </div>
+</div>
+
+<div class="grid grid-12" style="margin-bottom:18px;">
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Spend (MTD)</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("credit-card"))</div></div>
+        <div class="stat-tile__value tabular">$@Model.MonthFuelCost.ToString("N0")</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Total volume</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("fuel"))</div></div>
+        <div class="stat-tile__value tabular">@Model.TotalLiters.ToString("0") <span style="font-size:1rem;color:var(--ink-3);">L</span></div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Avg. cost / liter</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("gauge"))</div></div>
+        <div class="stat-tile__value tabular">$@Model.AvgCostPerLiter.ToString("0.00")</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Fleet efficiency</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("analytics"))</div></div>
+        <div class="stat-tile__value tabular">9.4 <span style="font-size:1rem;color:var(--ink-3);">L/100km</span></div>
+    </div>
+</div>
+
+<div class="grid grid-12" style="margin-bottom:18px;">
+    <div class="card card-pad col-7" data-viz style="position:relative;">
+        <div class="panel-head">
+            <div><div class="panel-title">Fuel spend — last 8 weeks</div><div class="panel-sub">All depots, fleet card transactions (SQL Server: WeeklyStats)</div></div>
+        </div>
+        <svg viewBox="0 0 560 170" style="width:100%; height:190px; overflow:visible;">
+            @for (int g = 1; g <= 3; g++)
+            {
+                <line x1="0" y1="@(g * 34)" x2="560" y2="@(g * 34)" stroke="var(--grid-line)" stroke-width="1" />
+            }
+            @{
+                double bw = 46, gap = weekly.Count > 0 ? (560 - weekly.Count * bw) / (weekly.Count + 1) : 0;
+            }
+            @for (int i = 0; i < weeklyCost.Length; i++)
+            {
+                double bh = (weeklyCost[i] / maxWk) * 120;
+                double bx = gap + i * (bw + gap);
+                double by = 136 - bh;
+                <rect x="@(bx.ToString("0.#"))" y="@(by.ToString("0.#"))" width="@bw" height="@(bh.ToString("0.#"))" rx="4" fill="var(--brand-500)"
+                      data-tt="<b>@weekly[i].WeekLabel</b> · $@(((int)weeklyCost[i]).ToString("N0"))" style="cursor:pointer;" />
+                @Html.Raw($"<text x=\"{(bx + bw / 2).ToString("0.#")}\" y=\"154\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--ink-3)\">{weekly[i].WeekLabel}</text>")
+                @Html.Raw($"<text x=\"{(bx + bw / 2).ToString("0.#")}\" y=\"{(by - 8).ToString("0.#")}\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"700\" fill=\"var(--ink-1)\">${((int)weeklyCost[i]).ToString("N0")}</text>")
+            }
+        </svg>
+        <div class="viz-tooltip"></div>
+    </div>
+
+    <div class="card card-pad col-5">
+        <div class="panel-head"><div class="panel-title">Fuel mix by type</div></div>
+        @if (donutSegs.Count == 0)
+        {
+            <div class="empty-state">@Html.Raw(IconLibrary.Get("vehicle"))<strong>No fuel logged yet</strong></div>
+        }
+        else
+        {
+            <div style="display:flex; align-items:center; gap:24px;">
+                <div data-viz style="position:relative; flex:none;">
+                    <svg viewBox="0 0 140 140" style="width:140px; height:140px;">
+                        <circle cx="70" cy="70" r="@rD" fill="none" stroke="var(--surface-2)" stroke-width="18" />
+                        @foreach (var seg in donutSegs)
+                        {
+                            <circle cx="70" cy="70" r="@rD" fill="none" stroke="@seg.Color" stroke-width="18"
+                                    stroke-dasharray="@(seg.Dash.ToString("0.##")) @((cD - seg.Dash).ToString("0.##"))"
+                                    stroke-dashoffset="@(seg.Offset.ToString("0.##"))" transform="rotate(-90 70 70)"
+                                    data-tt="<b>@seg.Type</b> · @(seg.Pct.ToString("0.#"))%" style="cursor:pointer;" />
+                        }
+                        @Html.Raw($"<text x=\"70\" y=\"75\" text-anchor=\"middle\" font-size=\"15\" font-weight=\"800\" fill=\"var(--ink-1)\">{Model.TotalLiters.ToString("0")} L</text>")
+                    </svg>
+                    <div class="viz-tooltip"></div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:10px; flex:1;">
+                    @foreach (var seg in donutSegs)
+                    {
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                            <span style="display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:var(--ink-2);">
+                                <span style="width:9px;height:9px;border-radius:3px;background:@seg.Color;flex:none;"></span>@seg.Type
+                            </span>
+                            <span class="mono" style="font-size:12.5px; font-weight:700;">@(seg.Pct.ToString("0.#"))%</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="card card-pad">
+    <div class="toolbar">
+        @foreach (var t in types)
+        {
+            var isActive = (Model.TypeFilter ?? "All") == t;
+            <a class="chip @(isActive ? "active" : "")" href="?TypeFilter=@t">@t</a>
+        }
+    </div>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Vehicle</th><th>Driver</th><th>Date</th><th>Fuel type</th><th class="num">Liters</th><th class="num">Cost / L</th><th class="num">Total</th><th>Station</th><th>Payment</th><th></th></tr></thead>
+            <tbody>
+                @if (Model.Records.Count == 0)
+                {
+                    <tr><td colspan="10"><div class="empty-state">@Html.Raw(IconLibrary.Get("vehicle"))<strong>No fuel records match this filter</strong></div></td></tr>
+                }
+                @foreach (var f in Model.Records)
+                {
+                    <tr>
+                        <td class="row-primary mono">@f.Vehicle?.PlateNumber</td>
+                        <td>@(f.Driver?.Name ?? "—")</td>
+                        <td class="mono" style="font-size:12.5px;">@f.Date.ToString("MMM d, yyyy")</td>
+                        <td><span class="pill pill-neutral">@f.FuelType</span></td>
+                        <td class="num mono">@f.Liters.ToString("0.0")</td>
+                        <td class="num mono">$@f.CostPerLiter.ToString("0.00")</td>
+                        <td class="num mono row-primary">$@f.TotalCost.ToString("0.00")</td>
+                        <td style="font-size:12.5px;">@f.Station</td>
+                        <td><span class="chip">@f.PaymentMethod</span></td>
+                        <td>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <button type="button" class="btn btn-secondary btn-sm" title="View invoice"
+                                        data-invoice-open
+                                        data-invoice-no="@FuelModel.InvoiceNumber(f.Id)"
+                                        data-vehicle="@f.Vehicle?.PlateNumber"
+                                        data-vehicle-make-model="@($"{f.Vehicle?.Make} {f.Vehicle?.Model}".Trim())"
+                                        data-driver="@(f.Driver?.Name ?? "Unassigned")"
+                                        data-depot="@f.Vehicle?.Depot"
+                                        data-invoice-date="@DateTime.UtcNow.ToString("MMM d, yyyy")"
+                                        data-transaction-date="@f.Date.ToString("MMM d, yyyy")"
+                                        data-payment-method="@f.PaymentMethod"
+                                        data-station="@f.Station"
+                                        data-description="@($"{f.FuelType} fuel purchase — {f.Station}")"
+                                        data-liters="@f.Liters.ToString("0.0")"
+                                        data-cost-per-liter="@($"${f.CostPerLiter.ToString("0.00")}")"
+                                        data-amount="@($"${f.TotalCost.ToString("0.00")}")"
+                                        data-odometer="@($"{f.Odometer:N0} km")"
+                                        data-pdf-url="?handler=InvoicePdf&id=@f.Id"
+                                        data-excel-url="?handler=InvoiceExcel&id=@f.Id">
+                                    @Html.Raw(IconLibrary.Get("file-text")) Invoice
+                                </button>
+                                <form method="post" asp-page-handler="Delete" asp-route-id="@f.Id" onsubmit="return confirm('Delete this fuel record?');"><button class="icon-btn btn-icon-only" type="submit" title="Delete">@Html.Raw(IconLibrary.Get("trash"))</button></form>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal-overlay" data-modal-overlay></div>
+<div class="modal" id="modal-invoice">
+    <div class="modal-head">
+        <div style="font-size:16px; font-weight:800; display:flex; align-items:center; gap:9px;">@Html.Raw(IconLibrary.Get("file-text")) Fuel purchase invoice</div>
+        <button class="icon-btn" data-modal-close aria-label="Close">@Html.Raw(IconLibrary.Get("x"))</button>
+    </div>
+    <div class="modal-body">
+        <div class="invoice-doc">
+            <div class="invoice-doc__head">
+                <div class="invoice-doc__brand">
+                    <strong>@Model.Settings.AgencyName</strong>
+                    <div>@Model.Settings.DivisionName</div>
+                    <div>@Model.Settings.HeadquartersAddress</div>
+                    <div>@Model.Settings.ContactEmail · @Model.Settings.ContactPhone</div>
+                </div>
+                <div class="invoice-doc__title">
+                    <strong>INVOICE</strong>
+                    <div data-field="invoiceNo"></div>
+                </div>
+            </div>
+            <div class="invoice-doc__meta">
+                <div>
+                    <div class="label">Bill to</div>
+                    <div style="font-weight:700;" data-field="vehicle"></div>
+                    <div data-field="vehicleMakeModel"></div>
+                    <div>Driver: <span data-field="driver"></span></div>
+                    <div>Depot: <span data-field="depot"></span></div>
+                </div>
+                <div style="text-align:right;">
+                    <div class="label">Details</div>
+                    <div>Invoice date: <span data-field="invoiceDate"></span></div>
+                    <div>Transaction date: <span data-field="transactionDate"></span></div>
+                    <div>Payment method: <span data-field="paymentMethod"></span></div>
+                    <div>Station: <span data-field="station"></span></div>
+                </div>
+            </div>
+            <table class="invoice-doc__table">
+                <thead><tr><th>Description</th><th class="num">Qty (L)</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td data-field="description"></td>
+                        <td class="num mono" data-field="liters"></td>
+                        <td class="num mono" data-field="costPerLiter"></td>
+                        <td class="num mono" data-field="amount"></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="invoice-doc__totals">
+                <div><span>Subtotal</span><span class="mono" data-field="subtotal"></span></div>
+                <div><span>Tax</span><span class="mono">$0.00</span></div>
+                <div class="total"><span>Total due</span><span class="mono" data-field="total"></span></div>
+            </div>
+            <div class="invoice-doc__foot">Odometer reading at fill-up: <span data-field="odometer"></span></div>
+        </div>
+    </div>
+    <div class="modal-foot">
+        <a class="btn btn-secondary" data-invoice-excel href="#">@Html.Raw(IconLibrary.Get("layers")) Export to Excel</a>
+        <button type="button" class="btn btn-secondary" data-invoice-print>@Html.Raw(IconLibrary.Get("printer")) Print</button>
+        <a class="btn btn-primary" data-invoice-pdf href="#">@Html.Raw(IconLibrary.Get("download")) Download PDF</a>
+    </div>
+</div>
+
+<div class="drawer-overlay" data-drawer-overlay></div>
+<div class="drawer" id="drawer-log-fuel">
+    <div class="drawer-head">
+        <div style="font-size:16px; font-weight:800;">Log fuel record</div>
+        <button class="icon-btn" data-drawer-close aria-label="Close">@Html.Raw(IconLibrary.Get("x"))</button>
+    </div>
+    <div class="drawer-body">
+        <form class="auth-form" method="post" asp-page-handler="Add">
+            <div class="field"><label>Vehicle</label>
+                <select class="select" name="vehicleId">
+                    @foreach (var v in Model.AllVehicles)
+                    {
+                        <option value="@v.Id">@v.PlateNumber — @v.Make @v.Model</option>
+                    }
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="field"><label>Fuel type</label><select class="select" name="fuelType"><option>Diesel</option><option>Petrol</option><option>Hybrid Petrol</option><option>Electric (kWh)</option></select></div>
+                <div class="field"><label>Date</label><input class="input" type="date" name="date" required /></div>
+            </div>
+            <div class="form-row">
+                <div class="field"><label>Liters</label><input class="input" type="number" step="0.1" name="liters" placeholder="54.0" required /></div>
+                <div class="field"><label>Cost / liter</label><input class="input" type="number" step="0.01" name="costPerLiter" placeholder="1.61" required /></div>
+            </div>
+            <div class="form-row">
+                <div class="field"><label>Odometer</label><input class="input" type="number" name="odometer" placeholder="81430" required /></div>
+                <div class="field"><label>Payment method</label><select class="select" name="paymentMethod"><option>Fleet Card</option><option>Fuel Voucher</option><option>Reimbursement</option></select></div>
+            </div>
+            <div class="field"><label>Station</label><input class="input" name="station" placeholder="North Depot Pump" required /></div>
+            <button type="submit" class="btn btn-primary btn-block btn-lg">@Html.Raw(IconLibrary.Get("check-circle")) Save record</button>
+        </form>
+    </div>
+</div>

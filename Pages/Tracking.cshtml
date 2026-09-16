@@ -1,0 +1,154 @@
+@page
+@model TrackingModel
+@{
+    ViewData["Title"] = "Real-Time GPS Tracking";
+    ViewData["ActiveNav"] = "tracking";
+    var liveVehicles = Model.LiveVehicles;
+    var geofences = Model.Geofences;
+    var selected = Model.Selected;
+
+    string PinColor(string status) => status switch
+    {
+        "Active" => "var(--status-good)",
+        "Idle" => "var(--accent-blue)",
+        "Overspeeding" => "var(--status-critical)",
+        "Alert" => "var(--status-serious)",
+        _ => "var(--ink-3)",
+    };
+    string PillClass(string status) => status switch
+    {
+        "Active" => "pill-good", "Idle" => "pill-info", "Overspeeding" => "pill-critical", "Alert" => "pill-serious", _ => "pill-neutral",
+    };
+}
+
+<div class="page-header">
+    <div>
+        <div class="crumb">@Html.Raw(IconLibrary.Get("gps")) Fleet Operations</div>
+        <h1>Real-Time GPS Tracking</h1>
+        <div class="page-header__meta">
+            <span class="pill pill-good"><span class="dot"></span> Live</span>
+            <span>@liveVehicles.Count(v => v.Status != "Offline") of @liveVehicles.Count vehicles reporting</span>
+        </div>
+    </div>
+    <div class="page-header__actions">
+        <button class="btn btn-secondary">@Html.Raw(IconLibrary.Get("target")) Manage geofences</button>
+        <form method="post" asp-page-handler="Simulate"><button type="submit" class="btn btn-primary">@Html.Raw(IconLibrary.Get("refresh")) Simulate movement</button></form>
+    </div>
+</div>
+
+<div class="grid grid-12">
+    <div class="card col-4" style="display:flex; flex-direction:column; max-height:640px;">
+        <div class="card-pad" style="padding-bottom:12px;">
+            <label class="search-field" style="width:100%;">
+                @Html.Raw(IconLibrary.Get("search"))
+                <input type="text" placeholder="Search live vehicles…" />
+            </label>
+        </div>
+        <div style="overflow-y:auto; padding:0 10px 10px;">
+            @if (liveVehicles.Count == 0)
+            {
+                <div class="empty-state">@Html.Raw(IconLibrary.Get("gps"))<strong>No vehicles reporting</strong></div>
+            }
+            @foreach (var lv in liveVehicles)
+            {
+                <div class="card-pad" style="padding:12px; border-radius:var(--radius-md); @(lv == selected ? "background:var(--brand-50); border:1px solid var(--brand-200);" : "border:1px solid transparent;") margin-bottom:4px; cursor:pointer;">
+                    <div style="display:flex; align-items:center; justify-content:between; gap:8px;">
+                        <span class="mono row-primary" style="font-size:13px;">@lv.Vehicle?.PlateNumber</span>
+                        <span class="pill @PillClass(lv.Status)" style="margin-left:auto;"><span class="dot"></span>@lv.Status</span>
+                    </div>
+                    <div class="text-muted" style="font-size:12px; margin-top:4px;">@(lv.Vehicle?.AssignedDriver?.Name ?? "Unassigned")</div>
+                    <div style="display:flex; align-items:center; gap:12px; margin-top:8px; font-size:11.5px; color:var(--ink-2);">
+                        <span style="display:flex; align-items:center; gap:4px;">@Html.Raw(IconLibrary.Get("gauge")) <span class="mono">@lv.SpeedKph.ToString("0") km/h</span></span>
+                        <span style="display:flex; align-items:center; gap:4px;">@Html.Raw(IconLibrary.Get("navigation")) @lv.Heading</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-8" style="display:flex; flex-direction:column; gap:18px;">
+        <div class="map-mock" data-viz data-map-zoom-root style="position:relative;">
+            <div data-map-canvas style="position:absolute; inset:0; transition:transform .2s ease; transform-origin:center center;">
+                <div class="map-mock__roads" style="background-image:
+                    repeating-linear-gradient(90deg, var(--baseline) 0 2px, transparent 2px 90px),
+                    repeating-linear-gradient(0deg, var(--baseline) 0 2px, transparent 2px 90px),
+                    repeating-linear-gradient(35deg, var(--accent-blue) 0 3px, transparent 3px 260px);
+                    background-size: 90px 90px, 90px 90px, 100% 100%; opacity:.4;"></div>
+
+                @foreach (var gf in geofences)
+                {
+                    <div class="map-mock__geofence" style="left:@(gf.Left)%; top:@(gf.Top)%; width:@(gf.Width)%; height:@(gf.Height)%;" title="@gf.Name"></div>
+                }
+
+                @foreach (var lv in liveVehicles)
+                {
+                    <div class="map-mock__pin" style="left:@(lv.Left)%; top:@(lv.Top)%;" data-tt="<b>@lv.Vehicle?.PlateNumber</b> · @(lv.Vehicle?.AssignedDriver?.Name ?? "Unassigned")<br/><span class='tt-label'>@lv.SpeedKph.ToString("0") km/h · @lv.Status</span>">
+                        <span class="map-mock__pin-label">@lv.Vehicle?.PlateNumber</span>
+                        <span style="position:relative; width:13px; height:13px; display:block;">
+                            @if (lv.SpeedKph > 0)
+                            {
+                                <span class="map-mock__pin-pulse" style="background:@PinColor(lv.Status);"></span>
+                            }
+                            <span class="map-mock__pin-dot" style="background:@PinColor(lv.Status);"></span>
+                        </span>
+                    </div>
+                }
+            </div>
+
+            <div class="map-mock__controls">
+                <div class="map-mock__zoom">
+                    <button type="button" data-map-zoom-in aria-label="Zoom in">@Html.Raw(IconLibrary.Get("plus"))</button>
+                    <button type="button" data-map-zoom-out aria-label="Zoom out">@Html.Raw(IconLibrary.Get("chevron-down"))</button>
+                </div>
+                <div class="map-mock__zoom">
+                    <button type="button" data-map-recenter aria-label="Recenter">@Html.Raw(IconLibrary.Get("target"))</button>
+                </div>
+            </div>
+
+            <div class="map-mock__legend">
+                <span style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:650;"><span style="width:8px;height:8px;border-radius:99px;background:var(--status-good);"></span>Active</span>
+                <span style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:650;"><span style="width:8px;height:8px;border-radius:99px;background:var(--accent-blue);"></span>Idle</span>
+                <span style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:650;"><span style="width:8px;height:8px;border-radius:99px;background:var(--status-critical);"></span>Alert</span>
+                <span style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:650;"><span style="width:8px;height:8px;border-radius:99px;background:var(--ink-3);"></span>Offline</span>
+            </div>
+            <div class="viz-tooltip"></div>
+        </div>
+
+        <div class="grid grid-12">
+            <div class="card stat-tile col-4">
+                <div class="stat-tile__top"><span class="stat-tile__label">Selected vehicle</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("vehicle"))</div></div>
+                <div class="stat-tile__value mono" style="font-size:1.4rem;">@(selected?.Vehicle?.PlateNumber ?? "—")</div>
+                <div class="stat-tile__foot"><span class="text-muted">@(selected?.Vehicle?.AssignedDriver?.Name ?? "Unassigned")</span></div>
+            </div>
+            <div class="card stat-tile col-4">
+                <div class="stat-tile__top"><span class="stat-tile__label">Current speed</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("gauge"))</div></div>
+                <div class="stat-tile__value tabular">@(selected?.SpeedKph.ToString("0") ?? "0") <span style="font-size:1rem;color:var(--ink-3);">km/h</span></div>
+                <div class="stat-tile__foot"><span class="text-muted">Heading @(selected?.Heading ?? "—")</span></div>
+            </div>
+            <div class="card stat-tile col-4">
+                <div class="stat-tile__top"><span class="stat-tile__label">Geofence alerts</span><div class="stat-tile__icon" style="background:var(--accent-blue-tint); color:var(--accent-blue-600);">@Html.Raw(IconLibrary.Get("target"))</div></div>
+                <div class="stat-tile__value tabular">@geofences.Sum(g => g.VehiclesInside)</div>
+                <div class="stat-tile__foot"><span class="text-muted">vehicles inside monitored zones</span></div>
+            </div>
+        </div>
+
+        <div class="card card-pad">
+            <div class="panel-head"><div class="panel-title">Monitored geofences</div></div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead><tr><th>Zone</th><th>Type</th><th class="num">Vehicles inside</th></tr></thead>
+                    <tbody>
+                        @foreach (var gf in geofences)
+                        {
+                            <tr>
+                                <td class="row-primary">@gf.Name</td>
+                                <td><span class="pill pill-info">@gf.Type</span></td>
+                                <td class="num mono">@gf.VehiclesInside</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

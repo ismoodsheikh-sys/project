@@ -1,0 +1,116 @@
+@using Microsoft.EntityFrameworkCore
+@using VehicleFleetMS.Data
+@inject FleetDbContext Db
+@{
+    var authSettings = await Db.Settings.FirstOrDefaultAsync() ?? new VehicleFleetMS.Models.AppSettings();
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@ViewData["Title"] · VMS</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="icon" type="image/png" href="~/icons/favicon-32.png" asp-append-version="true" />
+</head>
+<body>
+    <div class="texture-plane" aria-hidden="true"></div>
+    <div class="auth-shell">
+        <section class="auth-aside">
+            <svg class="auth-aside__scene" viewBox="0 0 400 500" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+                <defs>
+                    <radialGradient id="vmsSunGlow" cx="50%" cy="100%" r="75%">
+                        <stop offset="0%" stop-color="#ffd9a0" stop-opacity=".5" />
+                        <stop offset="45%" stop-color="#ffb066" stop-opacity=".2" />
+                        <stop offset="100%" stop-color="#ffb066" stop-opacity="0" />
+                    </radialGradient>
+                    <linearGradient id="vmsRoad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#08110e" />
+                        <stop offset="100%" stop-color="#0d1c17" />
+                    </linearGradient>
+                </defs>
+
+                <ellipse cx="300" cy="360" rx="260" ry="200" fill="url(#vmsSunGlow)" />
+
+                <g opacity=".55" fill="#04110c">
+                    <rect x="180" y="270" width="26" height="90" /><rect x="210" y="240" width="20" height="120" />
+                    <rect x="234" y="290" width="30" height="70" /><rect x="268" y="255" width="22" height="105" />
+                    <rect x="294" y="300" width="34" height="60" /><rect x="332" y="230" width="18" height="130" />
+                    <rect x="354" y="275" width="26" height="85" />
+                </g>
+                <g fill="#8be9c9" opacity=".55">
+                    <circle cx="192" cy="290" r="1.4" /><circle cx="220" cy="260" r="1.4" /><circle cx="246" cy="310" r="1.4" />
+                    <circle cx="278" cy="275" r="1.4" /><circle cx="308" cy="320" r="1.4" /><circle cx="340" cy="250" r="1.4" /><circle cx="364" cy="295" r="1.4" />
+                </g>
+
+                <path d="M190 362 L280 362 L400 500 L40 500 Z" fill="url(#vmsRoad)" />
+                <path d="M236 366 L212 500" stroke="#eaf6ef" stroke-width="3" stroke-dasharray="10 14" opacity=".3" />
+
+                <path class="vms-dash-route" d="M260 470 C 300 380, 260 300, 320 190 S 300 40, 360 -20" fill="none" stroke="#8be9c9" stroke-width="2" stroke-dasharray="1 9" stroke-linecap="round" opacity=".8" />
+                <circle cx="320" cy="190" r="4" fill="none" stroke="#8be9c9" stroke-width="1.5" class="vms-ping" />
+                <circle cx="320" cy="190" r="2.4" fill="#8be9c9" />
+                <circle cx="360" cy="42" r="3.4" fill="none" stroke="#eaf6ef" stroke-width="1.3" opacity=".7" />
+                <circle cx="360" cy="42" r="2" fill="#eaf6ef" opacity=".8" />
+
+                <g stroke="#eaf6ef" stroke-width="1.2" opacity=".4" fill="none">
+                    <path d="M172 384 L172 374 L182 374" /><path d="M368 384 L368 374 L358 374" />
+                    <path d="M172 472 L172 482 L182 482" /><path d="M368 472 L368 482 L358 482" />
+                </g>
+
+                <g transform="translate(180,388)">
+                    <ellipse cx="90" cy="72" rx="78" ry="7" fill="#020a07" opacity=".4" />
+                    <rect x="18" y="32" width="144" height="26" rx="9" fill="#0a2018" stroke="#8be9c9" stroke-width="1.3" stroke-opacity=".55" />
+                    <rect x="52" y="10" width="76" height="26" rx="11" fill="#0d2a1f" stroke="#8be9c9" stroke-width="1.3" stroke-opacity=".55" />
+                    <rect x="66" y="16" width="22" height="14" rx="3" fill="#123a2b" opacity=".9" />
+                    <rect x="92" y="16" width="22" height="14" rx="3" fill="#123a2b" opacity=".9" />
+                    <circle cx="46" cy="60" r="13" fill="#04110c" stroke="#8be9c9" stroke-width="1.2" stroke-opacity=".5" />
+                    <circle cx="134" cy="60" r="13" fill="#04110c" stroke="#8be9c9" stroke-width="1.2" stroke-opacity=".5" />
+                    <circle cx="46" cy="60" r="5" fill="#0d251b" /><circle cx="134" cy="60" r="5" fill="#0d251b" />
+                    <ellipse cx="166" cy="42" rx="6" ry="4" fill="#ffe3ac" opacity=".9" />
+                    <ellipse cx="14" cy="42" rx="4" ry="3" fill="#ff8a5c" opacity=".55" />
+                </g>
+                <path d="M348 428 L400 448 L400 466 L348 442 Z" fill="#ffe3ac" opacity=".12" />
+            </svg>
+            <div class="auth-aside__scrim"></div>
+            <div class="auth-aside__brand">
+                @if (!string.IsNullOrEmpty(authSettings.LogoPath))
+                {
+                    <img src="@authSettings.LogoPath" alt="@authSettings.AgencyShort logo" class="sidebar-brand__mark" style="object-fit:cover;" />
+                }
+                else
+                {
+                    <div class="sidebar-brand__mark">@Html.Raw(IconLibrary.Get("navigation"))</div>
+                }
+                <div class="sidebar-brand__text">
+                    <strong>VMS</strong>
+                    <span>Digital Vehicle Mgmt.</span>
+                </div>
+            </div>
+            <div class="auth-aside__headline">
+                <div class="eyebrow">Meridian Metro Transit Authority</div>
+                <h2>Welcome to DVM System</h2>
+                <p class="auth-aside__tagline">
+                    <span>Smart Fleet Management</span><span class="dot" aria-hidden="true">•</span>
+                    <span>Secure</span><span class="dot" aria-hidden="true">•</span>
+                    <span>Reliable</span><span class="dot" aria-hidden="true">•</span>
+                    <span>Real-Time Tracking</span>
+                </p>
+                <div class="auth-stat-row">
+                    <div><strong>1,284</strong><span>Vehicles monitored</span></div>
+                    <div><strong>99.97%</strong><span>Platform uptime</span></div>
+                    <div><strong>24/7</strong><span>Live GPS tracking</span></div>
+                </div>
+            </div>
+            <div class="auth-aside__foot">© 2026 Meridian Metro Transit Authority · Fleet Operations Division</div>
+        </section>
+        <section class="auth-main">
+            <div class="auth-card">
+                @RenderBody()
+            </div>
+        </section>
+    </div>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

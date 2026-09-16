@@ -1,0 +1,158 @@
+@page
+@model TripsModel
+@{
+    ViewData["Title"] = "Trip Management";
+    ViewData["ActiveNav"] = "trips";
+    string[] statuses = ["All", "In Progress", "Scheduled", "Completed", "Delayed", "Cancelled"];
+
+    string StatusClass(string s) => s switch
+    {
+        "In Progress" => "pill-info", "Scheduled" => "pill-neutral", "Completed" => "pill-good",
+        "Delayed" => "pill-warning", _ => "pill-critical",
+    };
+}
+
+<div class="page-header">
+    <div>
+        <div class="crumb">@Html.Raw(IconLibrary.Get("route")) Fleet Operations</div>
+        <h1>Trip Management</h1>
+        <div class="page-header__meta">
+            <span>@Model.InProgressCount trips in progress</span> · <span>@Model.ScheduledCount scheduled</span> · <span>@Model.CompletedYesterdayCount completed yesterday</span>
+        </div>
+    </div>
+    <div class="page-header__actions">
+        <a class="btn btn-secondary" href="?handler=Export&StatusFilter=@Model.StatusFilter">@Html.Raw(IconLibrary.Get("download")) Export</a>
+        <button class="btn btn-primary" data-drawer-open="drawer-plan-trip">@Html.Raw(IconLibrary.Get("plus")) Plan trip</button>
+    </div>
+</div>
+
+<div class="grid grid-12" style="margin-bottom:18px;">
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">In progress</span><div class="stat-tile__icon" style="background:var(--accent-blue-tint); color:var(--accent-blue-600);">@Html.Raw(IconLibrary.Get("navigation"))</div></div>
+        <div class="stat-tile__value tabular">@Model.InProgressCount</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Scheduled</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("calendar"))</div></div>
+        <div class="stat-tile__value tabular">@Model.ScheduledCount</div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Distance in progress</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("route"))</div></div>
+        <div class="stat-tile__value tabular">@Model.DistanceInProgress.ToString("0.#") <span style="font-size:1rem;color:var(--ink-3);">km</span></div>
+    </div>
+    <div class="card stat-tile col-3">
+        <div class="stat-tile__top"><span class="stat-tile__label">Completed yesterday</span><div class="stat-tile__icon" style="background:var(--status-good-tint); color:var(--status-good);">@Html.Raw(IconLibrary.Get("check-circle"))</div></div>
+        <div class="stat-tile__value tabular">@Model.CompletedYesterdayCount</div>
+    </div>
+</div>
+
+<div class="card card-pad">
+    <div class="toolbar">
+        @foreach (var s in statuses)
+        {
+            var isActive = (Model.StatusFilter ?? "All") == s;
+            <a class="chip @(isActive ? "active" : "")" href="?StatusFilter=@s">@s</a>
+        }
+    </div>
+
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr><th>Trip</th><th>Vehicle / Driver</th><th>Route</th><th>Start</th><th>Status</th><th class="num">Distance</th><th class="num">Fuel used</th><th></th></tr>
+            </thead>
+            <tbody>
+                @if (Model.Trips.Count == 0)
+                {
+                    <tr><td colspan="8"><div class="empty-state">@Html.Raw(IconLibrary.Get("route"))<strong>No trips match this filter</strong></div></td></tr>
+                }
+                @foreach (var t in Model.Trips)
+                {
+                    <tr>
+                        <td>
+                            <div class="row-primary mono">@t.TripCode</div>
+                            <div class="text-muted" style="font-size:11.5px;">@t.Purpose</div>
+                        </td>
+                        <td>
+                            <div class="row-flag">
+                                <div class="row-flag__icon">@Html.Raw(IconLibrary.Get("vehicle"))</div>
+                                <div class="row-flag__meta">
+                                    <span class="row-primary mono" style="font-size:12.5px;">@t.Vehicle?.PlateNumber</span>
+                                    <span>@t.Driver?.Name</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="font-size:12.5px;">
+                            <div>@t.Origin</div>
+                            <div class="text-muted" style="display:flex; align-items:center; gap:4px;">@Html.Raw(IconLibrary.Get("arrow-down-right")) @t.Destination</div>
+                        </td>
+                        <td class="mono" style="font-size:12.5px;">@t.StartTime.ToString("MMM d, HH:mm")</td>
+                        <td><span class="pill @StatusClass(t.Status)">@t.Status</span></td>
+                        <td class="num mono">@(t.DistanceKm > 0 ? t.DistanceKm.ToString("0.#") + " km" : "—")</td>
+                        <td class="num mono">@(t.FuelUsedL > 0 ? t.FuelUsedL.ToString("0.#") + " L" : "—")</td>
+                        <td>
+                            <div class="row-actions">
+                                @if (t.Status == "Scheduled")
+                                {
+                                    <form method="post" asp-page-handler="SetStatus" asp-route-id="@t.Id"><input type="hidden" name="status" value="In Progress" /><button class="btn btn-secondary btn-sm" type="submit">Start</button></form>
+                                }
+                                @if (t.Status == "In Progress")
+                                {
+                                    <form method="post" asp-page-handler="SetStatus" asp-route-id="@t.Id"><input type="hidden" name="status" value="Completed" /><button class="btn btn-secondary btn-sm" type="submit">Complete</button></form>
+                                }
+                                @if (t.Status is "Scheduled" or "In Progress")
+                                {
+                                    <form method="post" asp-page-handler="SetStatus" asp-route-id="@t.Id" onsubmit="return confirm('Cancel this trip?');"><input type="hidden" name="status" value="Cancelled" /><button class="icon-btn btn-icon-only" type="submit" title="Cancel">@Html.Raw(IconLibrary.Get("x"))</button></form>
+                                }
+                                <form method="post" asp-page-handler="Delete" asp-route-id="@t.Id" onsubmit="return confirm('Delete trip @t.TripCode?');"><button class="icon-btn btn-icon-only" type="submit" title="Delete">@Html.Raw(IconLibrary.Get("trash"))</button></form>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination">
+        <span>Showing <strong class="text-secondary">1–@Model.Trips.Count</strong> of <strong class="text-secondary">@Model.Trips.Count</strong> trips</span>
+    </div>
+</div>
+
+<div class="drawer-overlay" data-drawer-overlay></div>
+<div class="drawer" id="drawer-plan-trip">
+    <div class="drawer-head">
+        <div style="font-size:16px; font-weight:800;">Plan a trip</div>
+        <button class="icon-btn" data-drawer-close aria-label="Close">@Html.Raw(IconLibrary.Get("x"))</button>
+    </div>
+    <div class="drawer-body">
+        <form class="auth-form" method="post" asp-page-handler="Add">
+            <div class="form-row">
+                <div class="field"><label>Origin</label><input class="input" name="origin" placeholder="Central Garage" required /></div>
+                <div class="field"><label>Destination</label><input class="input" name="destination" placeholder="Downtown Loop A" required /></div>
+            </div>
+            <div class="form-row">
+                <div class="field"><label>Vehicle</label>
+                    <select class="select" name="vehicleId">
+                        @foreach (var v in Model.ActiveVehicles)
+                        {
+                            <option value="@v.Id">@v.PlateNumber — @v.Make @v.Model</option>
+                        }
+                    </select>
+                </div>
+                <div class="field"><label>Driver</label>
+                    <select class="select" name="driverId">
+                        @foreach (var d in Model.AvailableDrivers)
+                        {
+                            <option value="@d.Id">@d.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="field"><label>Scheduled start</label><input class="input" type="datetime-local" name="startTime" required /></div>
+                <div class="field"><label>Purpose</label>
+                    <select class="select" name="purpose"><option>Scheduled Transit Route</option><option>Waste Collection</option><option>Patrol Shift</option><option>Courier Run</option><option>Official Business</option><option>Equipment Transfer</option></select>
+                </div>
+            </div>
+            <div class="field"><label>Notes</label><textarea class="textarea" name="notes" rows="3" placeholder="Optional trip notes…"></textarea></div>
+            <button type="submit" class="btn btn-primary btn-block btn-lg">@Html.Raw(IconLibrary.Get("check-circle")) Schedule trip</button>
+        </form>
+    </div>
+</div>

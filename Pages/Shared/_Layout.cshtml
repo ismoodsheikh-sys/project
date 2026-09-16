@@ -1,0 +1,217 @@
+@using Microsoft.EntityFrameworkCore
+@using VehicleFleetMS.Data
+@inject FleetDbContext Db
+@{
+    var active = ViewData["ActiveNav"] as string ?? "";
+    var openAlerts = await Db.Alerts.CountAsync(a => a.Status == "New");
+    var settings = await Db.Settings.FirstOrDefaultAsync() ?? new VehicleFleetMS.Models.AppSettings();
+    var notifications = await Db.Notifications.OrderByDescending(n => n.CreatedAt).Take(6).ToListAsync();
+    var currentName = User.Identity?.Name ?? "Guest";
+    var currentEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "";
+    var currentRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "";
+    var currentInitials = string.Concat(currentName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(p => p[0])).ToUpperInvariant();
+    if (currentInitials.Length > 2) currentInitials = currentInitials[..2];
+    var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    var currentProfile = int.TryParse(currentUserId, out var currentUserIdInt)
+        ? await Db.Users.AsNoTracking().Where(u => u.Id == currentUserIdInt).Select(u => new { u.LastActiveAt, u.PhotoPath }).FirstOrDefaultAsync()
+        : null;
+    var currentLastActive = currentProfile?.LastActiveAt;
+    var currentPhotoPath = currentProfile?.PhotoPath;
+
+    var navGroups = new (string Label, (string Key, string Label, string Icon, string Href, int Badge)[] Items)[]
+    {
+        ("Overview", new[] {
+            ("dashboard", "Dashboard", "dashboard", "/Dashboard", 0),
+        }),
+        ("Fleet Operations", new[] {
+            ("vehicles", "Vehicle Management", "vehicle", "/Vehicles", 0),
+            ("drivers", "Driver Management", "driver", "/Drivers", 0),
+            ("tracking", "GPS Tracking", "gps", "/Tracking", 0),
+            ("trips", "Trip Management", "route", "/Trips", 0),
+            ("fuel", "Fuel Management", "fuel", "/Fuel", 0),
+            ("maintenance", "Maintenance", "wrench", "/Maintenance", 0),
+        }),
+        ("Intelligence", new[] {
+            ("reports", "Analytics & Reports", "analytics", "/Reports", 0),
+            ("alerts", "Alerts & Notifications", "bell", "/Alerts", openAlerts),
+        }),
+        ("Administration", new[] {
+            ("users", "Users & Roles", "roles", "/Users", 0),
+            ("settings", "Settings", "settings", "/Settings", 0),
+        }),
+    };
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@ViewData["Title"] · VMS</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="icon" type="image/png" href="~/icons/favicon-32.png" asp-append-version="true" />
+</head>
+<body class="@(active == "dashboard" ? "has-hero-bg" : "")">
+    <div class="texture-plane" aria-hidden="true"></div>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                @if (!string.IsNullOrEmpty(settings.LogoPath))
+                {
+                    <img src="@settings.LogoPath" alt="@settings.AgencyShort logo" class="sidebar-brand__mark" style="object-fit:cover;" />
+                }
+                else
+                {
+                    <div class="sidebar-brand__mark">@Html.Raw(IconLibrary.Get("vehicle"))</div>
+                }
+                <div class="sidebar-brand__text">
+                    <strong>VMS</strong>
+                    <span>Digital Vehicle Mgmt.</span>
+                </div>
+            </div>
+            <div class="sidebar-org">
+                @if (!string.IsNullOrEmpty(settings.LogoPath))
+                {
+                    <img src="@settings.LogoPath" alt="" class="sidebar-org__photo" />
+                }
+                else
+                {
+                    <div class="sidebar-org__photo sidebar-org__photo--fallback">@Html.Raw(IconLibrary.Get("vehicle"))</div>
+                }
+                <div class="sidebar-org__caption">
+                    <strong>@settings.AgencyShort</strong>
+                    <span>@settings.DivisionName</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav" aria-label="Primary">
+                @foreach (var group in navGroups)
+                {
+                    <div class="sidebar-group">
+                        <div class="sidebar-group__label">@group.Label</div>
+                        @foreach (var item in group.Items)
+                        {
+                            <a class="nav-item @(active == item.Key ? "active" : "")" href="@item.Href">
+                                @Html.Raw(IconLibrary.Get(item.Icon))
+                                <span class="label">@item.Label</span>
+                                @if (item.Badge > 0)
+                                {
+                                    <span class="nav-badge">@item.Badge</span>
+                                }
+                            </a>
+                        }
+                    </div>
+                }
+            </nav>
+            <div class="sidebar-foot">
+                <button type="button" class="collapse-btn" data-collapse-toggle>
+                    @Html.Raw(IconLibrary.Get("chevron-left"))
+                    <span>Collapse sidebar</span>
+                </button>
+            </div>
+        </aside>
+
+        <div>
+            <header class="topbar">
+                <button type="button" class="icon-btn topbar-menu-btn" data-mobile-menu-toggle aria-label="Open menu">
+                    @Html.Raw(IconLibrary.Get("menu"))
+                </button>
+                <label class="search-field">
+                    @Html.Raw(IconLibrary.Get("search"))
+                    <input type="text" placeholder="Search vehicles, drivers, trips…" aria-label="Search" />
+                    <kbd>Ctrl K</kbd>
+                </label>
+                <div class="topbar-spacer"></div>
+                <div class="topbar-actions">
+                    <div class="theme-switch" role="group" aria-label="Theme">
+                        <button type="button" data-theme-btn="light" title="Light">@Html.Raw(IconLibrary.Get("sun"))</button>
+                        <button type="button" data-theme-btn="dark" title="Dark">@Html.Raw(IconLibrary.Get("moon"))</button>
+                        <button type="button" data-theme-btn="system" class="active" title="System">@Html.Raw(IconLibrary.Get("monitor"))</button>
+                    </div>
+                    <div class="topbar-divider"></div>
+                    <div class="dropdown">
+                        <button type="button" class="icon-btn" data-dropdown-toggle="notif-menu" aria-label="Notifications">
+                            @Html.Raw(IconLibrary.Get("bell"))
+                            @if (notifications.Any(n => n.Unread))
+                            {
+                                <span class="dot"></span>
+                            }
+                        </button>
+                        <div class="dropdown-menu" id="notif-menu" style="width:340px; padding: 8px;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px 10px;">
+                                <strong style="font-size:13px;">Notifications</strong>
+                                <a href="/Alerts" style="font-size:11.5px;font-weight:650;color:var(--brand-600);">View all</a>
+                            </div>
+                            @if (!notifications.Any())
+                            {
+                                <div style="padding:16px; text-align:center; font-size:12.5px; color:var(--ink-3);">You're all caught up.</div>
+                            }
+                            @foreach (var n in notifications)
+                            {
+                                var sevClass = n.Severity switch { "Critical" => "pill-critical", "Serious" => "pill-serious", "Warning" => "pill-warning", _ => "pill-good" };
+                                <div class="notif-item @(n.Unread ? "unread" : "")">
+                                    <div class="notif-item__icon @sevClass">@Html.Raw(IconLibrary.Get(n.IconType))</div>
+                                    <div>
+                                        <div style="font-size:12.5px;font-weight:650;">@n.Title</div>
+                                        <div style="font-size:11.5px;color:var(--ink-3);margin-top:1px;">@n.Detail</div>
+                                        <div style="font-size:10.5px;color:var(--ink-3);margin-top:3px;">@n.CreatedAt.ToTimeAgo()</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <a href="/Settings" class="icon-btn" title="Settings">@Html.Raw(IconLibrary.Get("settings"))</a>
+                    <div class="topbar-divider"></div>
+                    <div class="dropdown">
+                        <button type="button" class="profile-btn" data-dropdown-toggle="profile-menu">
+                            @if (!string.IsNullOrEmpty(currentPhotoPath))
+                            {
+                                <img src="@currentPhotoPath" alt="" class="avatar-img" />
+                            }
+                            else
+                            {
+                                <div class="avatar">@currentInitials</div>
+                            }
+                            <div class="profile-meta">
+                                <strong>@currentName</strong>
+                                <span>@currentRole</span>
+                            </div>
+                            @Html.Raw(IconLibrary.Get("chevron-down"))
+                        </button>
+                        <div class="dropdown-menu profile-panel" id="profile-menu">
+                            <div class="profile-panel__head">
+                                @if (!string.IsNullOrEmpty(currentPhotoPath))
+                                {
+                                    <img src="@currentPhotoPath" alt="" class="avatar-img lg" />
+                                }
+                                else
+                                {
+                                    <div class="avatar lg">@currentInitials</div>
+                                }
+                                <div class="profile-panel__id">
+                                    <strong>@currentName</strong>
+                                    <span class="profile-panel__email">@currentEmail</span>
+                                    <span class="pill pill-info profile-panel__role">@Html.Raw(IconLibrary.Get("shield")) @currentRole</span>
+                                </div>
+                            </div>
+                            <div class="profile-panel__lastlogin">@Html.Raw(IconLibrary.Get("clock")) Last login @(currentLastActive?.ToTimeAgo() ?? "—")</div>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item" href="/Settings"><span class="dropdown-item__icon">@Html.Raw(IconLibrary.Get("driver"))</span> My Profile &amp; Settings</a>
+                            <a class="dropdown-item" href="/Settings?tab=security"><span class="dropdown-item__icon">@Html.Raw(IconLibrary.Get("lock"))</span> Change Password</a>
+                            <a class="dropdown-item" href="/Settings?tab=appearance"><span class="dropdown-item__icon">@Html.Raw(IconLibrary.Get("monitor"))</span> Appearance</a>
+                            <div class="dropdown-divider"></div>
+                            <a href="/Logout" class="btn btn-danger btn-block btn-sm">@Html.Raw(IconLibrary.Get("logout")) Sign Out</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <main class="content">
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -1,0 +1,349 @@
+@page
+@model SettingsModel
+@{
+    ViewData["Title"] = "Settings";
+    ViewData["ActiveNav"] = "settings";
+    var s = Model.Settings;
+    var notifTypes = new (string Key, string Label, bool Email, bool Sms, bool Push)[]
+    {
+        ("Overspeeding", "Overspeeding", s.NotifyOverspeedingEmail, s.NotifyOverspeedingSms, s.NotifyOverspeedingPush),
+        ("LowFuel", "Low fuel", s.NotifyLowFuelEmail, s.NotifyLowFuelSms, s.NotifyLowFuelPush),
+        ("Maintenance", "Maintenance due", s.NotifyMaintenanceEmail, s.NotifyMaintenanceSms, s.NotifyMaintenancePush),
+        ("Offline", "Offline vehicles", s.NotifyOfflineEmail, s.NotifyOfflineSms, s.NotifyOfflinePush),
+        ("Accident", "Accidents", s.NotifyAccidentEmail, s.NotifyAccidentSms, s.NotifyAccidentPush),
+        ("DocumentExpiry", "Document expiry", s.NotifyDocumentExpiryEmail, s.NotifyDocumentExpirySms, s.NotifyDocumentExpiryPush),
+    };
+}
+
+<div class="page-header">
+    <div>
+        <div class="crumb">@Html.Raw(IconLibrary.Get("settings")) Administration</div>
+        <h1>Settings</h1>
+        <div class="page-header__meta"><span>Configure @s.AgencyShort · @s.DivisionName</span></div>
+    </div>
+</div>
+
+@if (Model.Saved != null)
+{
+    <div class="pill pill-good" style="margin-bottom:16px; padding:8px 12px;">@Html.Raw(IconLibrary.Get("check-circle")) Settings saved.</div>
+}
+
+<div class="settings-layout">
+    <nav class="settings-nav" data-tabs="settings" aria-label="Settings sections">
+        <button type="button" class="active" data-tab="profile">@Html.Raw(IconLibrary.Get("building")) Company profile</button>
+        <button type="button" data-tab="gps">@Html.Raw(IconLibrary.Get("gps")) GPS &amp; tracking</button>
+        <button type="button" data-tab="security">@Html.Raw(IconLibrary.Get("lock")) Security</button>
+        <button type="button" data-tab="notifications">@Html.Raw(IconLibrary.Get("bell")) Notifications</button>
+        <button type="button" data-tab="backup">@Html.Raw(IconLibrary.Get("backup")) Backup &amp; data</button>
+        <button type="button" data-tab="appearance">@Html.Raw(IconLibrary.Get("monitor")) Appearance</button>
+    </nav>
+
+    <div>
+        <div data-tab-panel-group="settings" data-tab-panel="profile" class="tab-panel active">
+            <div class="card card-pad" style="margin-bottom:18px;">
+                <div class="panel-head"><div><div class="panel-title">Agency logo</div><div class="panel-sub">Shown in the sidebar and on the sign-in screen</div></div></div>
+                @if (Model.LogoError != null)
+                {
+                    <div class="pill pill-critical" style="margin-bottom:14px; padding:8px 12px;">@Html.Raw(IconLibrary.Get("alert-triangle")) @Model.LogoError</div>
+                }
+                <div style="display:flex; align-items:center; gap:16px;">
+                    @if (!string.IsNullOrEmpty(s.LogoPath))
+                    {
+                        <img src="@s.LogoPath" alt="Agency logo" style="width:56px; height:56px; border-radius:14px; object-fit:cover; border:1px solid var(--border);" />
+                    }
+                    else
+                    {
+                        <div class="sidebar-brand__mark" style="width:56px; height:56px; border-radius:14px;">@Html.Raw(IconLibrary.Get("navigation"))</div>
+                    }
+                    <form method="post" asp-page-handler="UploadLogo" enctype="multipart/form-data" style="display:flex; align-items:center; gap:10px;">
+                        <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                            @Html.Raw(IconLibrary.Get("upload")) Choose file
+                            <input type="file" name="logoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange="this.form.requestSubmit()" style="position:absolute; width:1px; height:1px; opacity:0;" />
+                        </label>
+                        <span class="text-muted" style="font-size:11px;">PNG, JPEG, WEBP or SVG, up to 2MB</span>
+                    </form>
+                    @if (!string.IsNullOrEmpty(s.LogoPath))
+                    {
+                        <form method="post" asp-page-handler="RemoveLogo">
+                            <button type="submit" class="icon-btn btn-icon-only" title="Remove logo">@Html.Raw(IconLibrary.Get("trash"))</button>
+                        </form>
+                    }
+                </div>
+            </div>
+            <form class="card card-pad" method="post" asp-page-handler="Profile">
+                <div class="panel-head"><div><div class="panel-title">Company profile</div><div class="panel-sub">Agency identity shown across the platform</div></div><button type="submit" class="btn btn-primary btn-sm">Save</button></div>
+                <div class="form-row">
+                    <div class="field"><label>Agency name</label><input class="input" name="agencyName" value="@s.AgencyName" /></div>
+                    <div class="field"><label>Short code</label><input class="input" name="agencyShort" value="@s.AgencyShort" /></div>
+                </div>
+                <div class="form-row">
+                    <div class="field"><label>Division</label><input class="input" name="divisionName" value="@s.DivisionName" /></div>
+                    <div class="field"><label>Timezone</label>
+                        <select class="select" name="timezone">
+                            @foreach (var tz in new[] { "(UTC-08:00) Pacific Time", "(UTC-05:00) Eastern Time", "(UTC+00:00) UTC" }) { <option selected="@(tz == s.Timezone)">@tz</option> }
+                        </select>
+                    </div>
+                </div>
+                <div class="field"><label>Headquarters address</label><input class="input" name="headquartersAddress" value="@s.HeadquartersAddress" /></div>
+                <div class="form-row">
+                    <div class="field"><label>Contact email</label><input class="input" type="email" name="contactEmail" value="@s.ContactEmail" /></div>
+                    <div class="field"><label>Contact phone</label><input class="input" name="contactPhone" value="@s.ContactPhone" /></div>
+                </div>
+                <div class="field">
+                    <label>Brand accent</label>
+                    <div style="display:flex; gap:10px; margin-top:2px;">
+                        @{ var swatches = new[] { "#0e6e52", "#157a56", "#2a78d6", "#4a3aa7", "#a8660b" }; }
+                        @foreach (var sw in swatches)
+                        {
+                            <label style="width:32px; height:32px; border-radius:9px; background:@sw; cursor:pointer; border:2px solid @(sw == s.BrandAccent ? "var(--ink-1)" : "transparent"); box-shadow:0 0 0 2px var(--surface) inset; display:block;">
+                                <input type="radio" name="brandAccent" value="@sw" checked="@(sw == s.BrandAccent)" class="sr-only" />
+                            </label>
+                        }
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div data-tab-panel-group="settings" data-tab-panel="gps" class="tab-panel">
+            <form class="card card-pad" method="post" asp-page-handler="Gps" style="margin-bottom:18px;">
+                <div class="panel-head"><div><div class="panel-title">GPS &amp; tracking</div><div class="panel-sub">Live location polling and telematics thresholds</div></div><button type="submit" class="btn btn-primary btn-sm">Save</button></div>
+                <div class="field" style="margin-bottom:18px;">
+                    <label>Location update interval</label>
+                    <input type="range" name="locationUpdateIntervalSeconds" min="5" max="60" value="@s.LocationUpdateIntervalSeconds" data-fill style="width:100%; accent-color: var(--brand-600);" />
+                    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--ink-3);"><span>5s (real-time)</span><span>@(s.LocationUpdateIntervalSeconds)s selected</span><span>60s (battery saver)</span></div>
+                </div>
+                <div class="form-row">
+                    <div class="field"><label>Overspeeding threshold</label><input class="input" type="number" name="overspeedingThresholdKph" value="@s.OverspeedingThresholdKph" /><span class="hint">km/h, applies fleet-wide unless overridden per vehicle</span></div>
+                    <div class="field"><label>Offline alert timeout</label><input class="input" type="number" name="offlineAlertTimeoutMinutes" value="@s.OfflineAlertTimeoutMinutes" /><span class="hint">minutes without signal before flagging offline</span></div>
+                </div>
+                <div class="form-row">
+                    <div class="field"><label>Map provider</label>
+                        <select class="select" name="mapProvider">
+                            @foreach (var mp in new[] { "VMS Maps (default)", "OpenStreetMap", "Custom tile server" }) { <option selected="@(mp == s.MapProvider)">@mp</option> }
+                        </select>
+                    </div>
+                    <div class="field"><label>Default map center</label><input class="input mono" name="defaultMapCenter" value="@s.DefaultMapCenter" /></div>
+                </div>
+                <div class="switch-row">
+                    <div><div class="switch-row__label">Geofence exit alerts</div><div class="switch-row__desc">Notify dispatch when a vehicle leaves an approved zone</div></div>
+                    <label class="switch"><input type="checkbox" name="geofenceExitAlerts" value="true" checked="@s.GeofenceExitAlerts" /><span class="switch__track"></span><span class="switch__thumb"></span></label>
+                </div>
+                <div class="switch-row">
+                    <div><div class="switch-row__label">Route deviation detection</div><div class="switch-row__desc">Flag trips that stray from the planned route</div></div>
+                    <label class="switch"><input type="checkbox" name="routeDeviationDetection" value="true" checked="@s.RouteDeviationDetection" /><span class="switch__track"></span><span class="switch__thumb"></span></label>
+                </div>
+                <div class="switch-row">
+                    <div><div class="switch-row__label">Idle engine tracking</div><div class="switch-row__desc">Log excessive idling for fuel-efficiency reporting</div></div>
+                    <label class="switch"><input type="checkbox" name="idleEngineTracking" value="true" checked="@s.IdleEngineTracking" /><span class="switch__track"></span><span class="switch__thumb"></span></label>
+                </div>
+            </form>
+        </div>
+
+        <div data-tab-panel-group="settings" data-tab-panel="security" class="tab-panel">
+            <div class="card card-pad" style="margin-bottom:18px;">
+                <div class="panel-head"><div><div class="panel-title">My account</div><div class="panel-sub">Your profile photo and personal information</div></div></div>
+                @if (Model.AccountError != null)
+                {
+                    <div class="pill pill-critical" style="margin-bottom:14px; padding:8px 12px;">@Html.Raw(IconLibrary.Get("alert-triangle")) @Model.AccountError</div>
+                }
+                @if (Model.Saved == "account")
+                {
+                    <div class="pill pill-good" style="margin-bottom:14px; padding:8px 12px;">@Html.Raw(IconLibrary.Get("check-circle")) Account details updated.</div>
+                }
+                <div style="display:flex; align-items:center; gap:16px; margin-bottom:22px;">
+                    @if (!string.IsNullOrEmpty(Model.CurrentUser?.PhotoPath))
+                    {
+                        <img src="@Model.CurrentUser.PhotoPath" alt="Profile photo" class="avatar-img lg" />
+                    }
+                    else
+                    {
+                        <div class="avatar lg">@Model.CurrentUser?.Initials</div>
+                    }
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <form method="post" asp-page-handler="UploadAvatar" enctype="multipart/form-data" style="position:relative; display:flex; align-items:center; gap:10px;">
+                            <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                                @Html.Raw(IconLibrary.Get("upload")) Upload photo
+                                <input type="file" name="avatarFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange="this.form.requestSubmit()" style="position:absolute; width:1px; height:1px; opacity:0;" />
+                            </label>
+                            <span class="text-muted" style="font-size:11px;">PNG, JPEG, WEBP or SVG, up to 2MB</span>
+                        </form>
+                        @if (!string.IsNullOrEmpty(Model.CurrentUser?.PhotoPath))
+                        {
+                            <form method="post" asp-page-handler="RemoveAvatar">
+                                <button type="submit" class="icon-btn btn-icon-only" title="Remove photo">@Html.Raw(IconLibrary.Get("trash"))</button>
+                            </form>
+                        }
+                    </div>
+                </div>
+                <form method="post" asp-page-handler="Account">
+                    <div class="form-row">
+                        <div class="field"><label>Full name</label><input class="input" name="name" value="@Model.CurrentUser?.Name" required /></div>
+                        <div class="field"><label>Username</label><input class="input" name="username" value="@Model.CurrentUser?.Username" required /></div>
+                    </div>
+                    <div class="form-row" style="margin-top:14px;">
+                        <div class="field"><label>Email address</label><input class="input" type="email" name="email" value="@Model.CurrentUser?.Email" required /></div>
+                        <div class="field"><label>Phone</label><input class="input" type="tel" name="phone" value="@Model.CurrentUser?.Phone" placeholder="(415) 555-0100" /></div>
+                    </div>
+                    <div class="field" style="margin-top:14px;">
+                        <label>Role</label>
+                        <div><span class="pill pill-info">@Html.Raw(IconLibrary.Get("shield")) @Model.CurrentUser?.Role</span></div>
+                        <span class="hint">Managed by a System Administrator in Users &amp; Roles.</span>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm" style="margin-top:16px;">Save account details</button>
+                </form>
+            </div>
+            <div class="card card-pad" style="margin-bottom:18px;">
+                <div class="panel-head"><div><div class="panel-title">Change password</div><div class="panel-sub">Choose a strong password you haven't used before</div></div></div>
+                @if (Model.PasswordError != null)
+                {
+                    <div class="pill pill-critical" style="margin-bottom:14px; padding:8px 12px;">@Html.Raw(IconLibrary.Get("alert-triangle")) @Model.PasswordError</div>
+                }
+                @if (Model.Saved == "password")
+                {
+                    <div class="pill pill-good" style="margin-bottom:14px; padding:8px 12px;">@Html.Raw(IconLibrary.Get("check-circle")) Password updated.</div>
+                }
+                <form method="post" asp-page-handler="ChangePassword">
+                    <div class="field"><label>Current password</label><input class="input" type="password" name="currentPassword" required /></div>
+                    <div class="form-row" style="margin-top:14px;">
+                        <div class="field"><label>New password</label><input class="input" type="password" name="newPassword" minlength="8" required /></div>
+                        <div class="field"><label>Confirm new password</label><input class="input" type="password" name="confirmPassword" minlength="8" required /></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm" style="margin-top:14px;">Update password</button>
+                </form>
+            </div>
+            <form class="card card-pad" method="post" asp-page-handler="Security">
+                <div class="panel-head"><div><div class="panel-title">Authentication</div><div class="panel-sub">Controls apply to all @s.AgencyShort accounts</div></div><button type="submit" class="btn btn-primary btn-sm">Save</button></div>
+                <div class="switch-row">
+                    <div><div class="switch-row__label">Require two-factor authentication</div><div class="switch-row__desc">Email OTP required at every sign-in, fleet-wide</div></div>
+                    <label class="switch"><input type="checkbox" name="requireTwoFactor" value="true" checked="@s.RequireTwoFactor" /><span class="switch__track"></span><span class="switch__thumb"></span></label>
+                </div>
+                <div class="switch-row">
+                    <div><div class="switch-row__label">Agency SSO</div><div class="switch-row__desc">Allow sign-in via your identity provider</div></div>
+                    <label class="switch"><input type="checkbox" name="agencySso" value="true" checked="@s.AgencySso" /><span class="switch__track"></span><span class="switch__thumb"></span></label>
+                </div>
+                <div class="switch-row">
+                    <div><div class="switch-row__label">Auto-suspend on safety score drop</div><div class="switch-row__desc">Suspend a driver automatically below 70/100</div></div>
+                    <label class="switch"><input type="checkbox" name="autoSuspendOnSafetyDrop" value="true" checked="@s.AutoSuspendOnSafetyDrop" /><span class="switch__track"></span><span class="switch__thumb"></span></label>
+                </div>
+                <div class="form-row" style="margin-top:16px;">
+                    <div class="field"><label>Session timeout</label>
+                        <select class="select" name="sessionTimeout">
+                            @foreach (var t in new[] { "15 minutes", "30 minutes", "1 hour", "4 hours" }) { <option selected="@(t == s.SessionTimeout)">@t</option> }
+                        </select>
+                    </div>
+                    <div class="field"><label>Password expiry</label>
+                        <select class="select" name="passwordExpiry">
+                            @foreach (var t in new[] { "60 days", "90 days", "Never" }) { <option selected="@(t == s.PasswordExpiry)">@t</option> }
+                        </select>
+                    </div>
+                </div>
+                <div class="field"><label>IP allowlist</label><textarea class="textarea" name="ipAllowlist" rows="3">@s.IpAllowlist</textarea><span class="hint">One CIDR range or IP per line. Leave blank to allow any network.</span></div>
+            </form>
+        </div>
+
+        <div data-tab-panel-group="settings" data-tab-panel="notifications" class="tab-panel">
+            <form class="card card-pad" method="post" asp-page-handler="Notifications">
+                <div class="panel-head"><div><div class="panel-title">Alert notifications</div><div class="panel-sub">Choose how each alert type reaches you</div></div><button type="submit" class="btn btn-primary btn-sm">Save</button></div>
+                <div class="table-wrap">
+                    <table class="perm-grid" style="min-width:520px;">
+                        <thead><tr><th>Alert type</th><th>Email</th><th>SMS</th><th>Push</th></tr></thead>
+                        <tbody>
+                            @foreach (var n in notifTypes)
+                            {
+                                <tr>
+                                    <td>@n.Label</td>
+                                    <td><label class="switch"><input type="checkbox" name="notify@(n.Key)Email" value="true" checked="@n.Email" /><span class="switch__track"></span><span class="switch__thumb"></span></label></td>
+                                    <td><label class="switch"><input type="checkbox" name="notify@(n.Key)Sms" value="true" checked="@n.Sms" /><span class="switch__track"></span><span class="switch__thumb"></span></label></td>
+                                    <td><label class="switch"><input type="checkbox" name="notify@(n.Key)Push" value="true" checked="@n.Push" /><span class="switch__track"></span><span class="switch__thumb"></span></label></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </form>
+        </div>
+
+        <div data-tab-panel-group="settings" data-tab-panel="backup" class="tab-panel">
+            <div class="card card-pad" style="margin-bottom:18px;">
+                <div class="panel-head"><div><div class="panel-title">Backup &amp; data</div><div class="panel-sub">Automated backups of fleet, driver and trip records</div></div></div>
+                <div class="grid" style="grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;">
+                    <div class="card card-pad" style="background:var(--surface-2); box-shadow:none;">
+                        <div class="eyebrow">Last backup</div>
+                        <div style="font-size:16px; font-weight:700; margin-top:4px;">@(s.LastBackupAt?.ToLocalTime().ToString("MMM d, h:mm tt") ?? "Never")</div>
+                        <span class="pill pill-good" style="margin-top:8px;"><span class="dot"></span>Successful</span>
+                    </div>
+                    <div class="card card-pad" style="background:var(--surface-2); box-shadow:none;">
+                        <div class="eyebrow">Storage used</div>
+                        <div style="font-size:16px; font-weight:700; margin-top:4px;">18.4 GB <span class="text-muted" style="font-weight:500; font-size:12px;">of 100 GB</span></div>
+                        <div class="meter" style="margin-top:8px;"><div class="meter__fill" style="width:18.4%;"></div></div>
+                    </div>
+                </div>
+                <form method="post" asp-page-handler="Backup">
+                    <div class="form-row">
+                        <div class="field"><label>Backup frequency</label>
+                            <select class="select" name="backupFrequency">
+                                @foreach (var f in new[] { "Every 6 hours", "Daily at 03:00", "Weekly" }) { <option selected="@(f == s.BackupFrequency)">@f</option> }
+                            </select>
+                        </div>
+                        <div class="field"><label>Data retention period</label>
+                            <select class="select" name="dataRetentionPeriod">
+                                @foreach (var r in new[] { "1 year", "3 years", "7 years (compliance)", "Indefinite" }) { <option selected="@(r == s.DataRetentionPeriod)">@r</option> }
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-secondary" style="margin-top:6px;">Save schedule</button>
+                </form>
+                <form method="post" asp-page-handler="BackupNow" style="display:inline;">
+                    <button type="submit" class="btn btn-primary" style="margin-top:6px;">@Html.Raw(IconLibrary.Get("backup")) Back up now</button>
+                </form>
+            </div>
+        </div>
+
+        <div data-tab-panel-group="settings" data-tab-panel="appearance" class="tab-panel">
+            <div class="card card-pad">
+                <div class="panel-head"><div><div class="panel-title">Appearance</div><div class="panel-sub">Theme applies instantly across your session</div></div></div>
+                <div class="grid" style="grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:20px;">
+                    <div class="theme-option" data-theme-btn="light">
+                        <div class="theme-option-preview" style="background:#f2f5f3;">
+                            <div style="width:30%; background:#0a5640;"></div>
+                            <div style="flex:1; padding:8px;"><div style="width:60%; height:6px; background:#c9e5d6; border-radius:3px;"></div><div style="width:40%; height:6px; background:#e2e8e4; border-radius:3px; margin-top:5px;"></div></div>
+                        </div>
+                        <div style="font-size:13px; font-weight:650;">Light</div>
+                    </div>
+                    <div class="theme-option" data-theme-btn="dark">
+                        <div class="theme-option-preview" style="background:#0a1210;">
+                            <div style="width:30%; background:#0a5640;"></div>
+                            <div style="flex:1; padding:8px;"><div style="width:60%; height:6px; background:#16241f; border-radius:3px;"></div><div style="width:40%; height:6px; background:#1f2e28; border-radius:3px; margin-top:5px;"></div></div>
+                        </div>
+                        <div style="font-size:13px; font-weight:650;">Dark</div>
+                    </div>
+                    <div class="theme-option" data-theme-btn="system">
+                        <div class="theme-option-preview" style="background:linear-gradient(90deg, #f2f5f3 50%, #0a1210 50%);">
+                            <div style="width:30%; background:#0a5640;"></div>
+                        </div>
+                        <div style="font-size:13px; font-weight:650;">Match system</div>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Table density</label>
+                    <div style="display:flex; gap:10px; margin-top:2px;">
+                        <button type="button" class="chip active" data-density-btn="comfortable">Comfortable</button>
+                        <button type="button" class="chip" data-density-btn="compact">Compact</button>
+                    </div>
+                    <span class="hint">Applies instantly to every table across VMS, remembered on this device.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var tab = new URLSearchParams(window.location.search).get("tab");
+            if (!tab) return;
+            var btn = document.querySelector('.settings-nav [data-tab="' + tab + '"]');
+            if (btn) btn.click();
+        })();
+    </script>
+}

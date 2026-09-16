@@ -1,0 +1,327 @@
+@page
+@model DashboardModel
+@{
+    ViewData["Title"] = "Dashboard";
+    ViewData["ActiveNav"] = "dashboard";
+
+    var statusData = new (string Label, int Value, string Color, string Pill)[] {
+        ("Active", Model.ActiveVehicles, "var(--status-good)", "pill-good"),
+        ("Maintenance", Model.MaintenanceVehicles, "var(--status-warning)", "pill-warning"),
+        ("Idle", Model.IdleVehicles, "var(--accent-blue)", "pill-info"),
+        ("Out of Service", Model.OutOfServiceVehicles, "var(--status-critical)", "pill-critical"),
+    };
+    var total = statusData.Sum(s => s.Value);
+    double r = 54, C = 2 * Math.PI * r;
+    double cum = 0;
+    var segments = statusData.Select(s =>
+    {
+        double frac = total == 0 ? 0 : (double)s.Value / total;
+        double dash = frac * C;
+        var seg = (s.Label, s.Value, s.Color, s.Pill, Dash: dash, Offset: -cum, Pct: frac * 100);
+        cum += dash;
+        return seg;
+    }).ToList();
+
+    var weekly = Model.WeeklyStats;
+    var distance = weekly.Select(w => w.DistanceKm).ToArray();
+    double maxD = distance.Length > 0 ? distance.Max() : 1;
+    double chartW = 560, chartH = 150;
+    var pts = distance.Select((d, i) =>
+    {
+        double x = weekly.Count > 1 ? i * (chartW / (weekly.Count - 1)) : 0;
+        double y = chartH - (d / maxD) * chartH * 0.84 - 8;
+        return (x, y, d);
+    }).ToList();
+    string linePath = string.Join(" ", pts.Select((p, i) => (i == 0 ? "M" : "L") + p.x.ToString("0.#") + "," + p.y.ToString("0.#")));
+    string areaPath = pts.Count > 0 ? linePath + $" L{chartW.ToString("0.#")},{chartH} L0,{chartH} Z" : "";
+
+    var catData = Model.CategoryDistance;
+    double maxCat = catData.Count > 0 ? catData.Max(c => c.Km) : 1;
+}
+
+<div class="page-header">
+    <div>
+        <div class="crumb">@Html.Raw(IconLibrary.Get("home")) Overview</div>
+        <h1>VMS Dashboard</h1>
+        <div class="page-header__meta">
+            <span class="pill pill-good"><span class="dot"></span> Live</span>
+            <span>Connected to SQL Server · VMS Operations</span>
+        </div>
+    </div>
+    <div class="page-header__actions">
+        <button class="btn btn-secondary chip active">@Html.Raw(IconLibrary.Get("calendar")) Today</button>
+        <a class="btn btn-secondary" href="?handler=Export">@Html.Raw(IconLibrary.Get("download")) Export</a>
+        <a href="/Trips" class="btn btn-primary">@Html.Raw(IconLibrary.Get("plus")) Plan a trip</a>
+    </div>
+</div>
+
+<div class="grid grid-12" style="margin-bottom:18px;">
+    <a class="card stat-tile col-4" href="/Vehicles" title="View all vehicles">
+        <div class="stat-tile__top">
+            <span class="stat-tile__label">Total fleet</span>
+            <div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("vehicle"))</div>
+        </div>
+        <div class="stat-tile__value tabular">@Model.TotalVehicles</div>
+        <div class="stat-tile__foot"><span class="text-muted">registered vehicles</span> <span class="stat-tile__link">View all →</span></div>
+    </a>
+    <a class="card stat-tile col-4" href="/Vehicles?StatusFilter=Active" title="View active vehicles">
+        <div class="stat-tile__top">
+            <span class="stat-tile__label">Active now</span>
+            <div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("zap"))</div>
+        </div>
+        <div class="stat-tile__value tabular">@Model.ActiveVehicles</div>
+        <div class="stat-tile__foot"><span class="text-muted">@(Model.TotalVehicles > 0 ? Math.Round(Model.ActiveVehicles * 100.0 / Model.TotalVehicles) : 0)% of fleet on the road</span> <span class="stat-tile__link">View →</span></div>
+    </a>
+    <a class="card stat-tile col-4" href="/Drivers?StatusFilter=On Trip" title="View drivers currently on trip">
+        <div class="stat-tile__top">
+            <span class="stat-tile__label">Drivers on trip</span>
+            <div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("driver"))</div>
+        </div>
+        <div class="stat-tile__value tabular">@Model.OnTripDrivers<span style="font-size:1rem;color:var(--ink-3);font-weight:650;"> / @Model.TotalDrivers</span></div>
+        <div class="stat-tile__foot"><span class="text-muted">on active routes right now</span> <span class="stat-tile__link">View →</span></div>
+    </a>
+    <a class="card stat-tile col-4" href="/Alerts?StatusFilter=New" title="Review open alerts">
+        <div class="stat-tile__top">
+            <span class="stat-tile__label">Open alerts</span>
+            <div class="stat-tile__icon" style="background:var(--status-critical-tint); color:var(--status-critical);">@Html.Raw(IconLibrary.Get("alert-triangle"))</div>
+        </div>
+        <div class="stat-tile__value tabular">@Model.OpenAlerts</div>
+        <div class="stat-tile__foot"><span class="stat-tile__link" style="font-weight:650;color:var(--brand-600);">Review alerts →</span></div>
+    </a>
+    <a class="card stat-tile col-4" href="/Trips" title="View trips">
+        <div class="stat-tile__top">
+            <span class="stat-tile__label">Distance today</span>
+            <div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("route"))</div>
+        </div>
+        <div class="stat-tile__value tabular">@Model.TodayDistanceKm.ToString("N0")<span style="font-size:1rem;color:var(--ink-3);font-weight:650;"> km</span></div>
+        <div class="stat-tile__foot"><span class="text-muted">fleet-wide, in-progress trips included</span> <span class="stat-tile__link">View trips →</span></div>
+    </a>
+    <a class="card stat-tile col-4" href="/Reports" title="View fleet performance reports">
+        <div class="stat-tile__top">
+            <span class="stat-tile__label">Fleet utilization</span>
+            <div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("gauge"))</div>
+        </div>
+        <div class="stat-tile__value tabular">@Model.FleetUtilizationPct.ToString("0.0")%</div>
+        <div class="meter"><div class="meter__fill" style="width:@(Model.FleetUtilizationPct)%;"></div></div>
+    </a>
+</div>
+
+<div class="grid grid-12" style="margin-bottom:18px;">
+    <div class="card card-pad col-7" data-viz style="position:relative;">
+        <div class="panel-head">
+            <div>
+                <div class="panel-title">Distance covered — last 8 weeks</div>
+                <div class="panel-sub">Fleet-wide, all depots (SQL Server: WeeklyStats)</div>
+            </div>
+            <span class="chip">@Html.Raw(IconLibrary.Get("route")) Kilometers</span>
+        </div>
+        <svg viewBox="0 0 560 150" style="width:100%; height:170px; overflow:visible;">
+            <defs>
+                <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="var(--brand-500)" stop-opacity="0.22" />
+                    <stop offset="100%" stop-color="var(--brand-500)" stop-opacity="0" />
+                </linearGradient>
+            </defs>
+            @for (int g = 1; g <= 3; g++)
+            {
+                <line x1="0" y1="@(g * 37.5)" x2="560" y2="@(g * 37.5)" stroke="var(--grid-line)" stroke-width="1" />
+            }
+            <path d="@areaPath" fill="url(#areaFill)" />
+            <path d="@linePath" fill="none" stroke="var(--brand-500)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+            @for (int i = 0; i < pts.Count; i++)
+            {
+                var p = pts[i];
+                var isMax = distance[i] == maxD;
+                <circle cx="@(p.x.ToString("0.#"))" cy="@(p.y.ToString("0.#"))" r="@(isMax ? 5 : 4)" fill="@(isMax ? "var(--brand-600)" : "var(--surface)")" stroke="var(--brand-500)" stroke-width="2"
+                        data-tt="<b>@weekly[i].WeekLabel</b> · @(((int)distance[i]).ToString("N0")) km" style="cursor:pointer;" />
+                @Html.Raw($"<text x=\"{p.x.ToString("0.#")}\" y=\"168\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--ink-3)\">{weekly[i].WeekLabel}</text>")
+                @if (isMax)
+                {
+                    @Html.Raw($"<text x=\"{p.x.ToString("0.#")}\" y=\"{(p.y - 12).ToString("0.#")}\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"700\" fill=\"var(--ink-1)\">{((int)distance[i]).ToString("N0")}</text>")
+                }
+            }
+        </svg>
+        <div class="viz-tooltip"></div>
+    </div>
+
+    <div class="card card-pad col-5">
+        <div class="panel-head">
+            <div>
+                <div class="panel-title">Fleet status</div>
+                <div class="panel-sub">@total vehicles across 4 depots</div>
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:24px;">
+            <div data-viz style="position:relative; flex:none;">
+                <svg viewBox="0 0 140 140" style="width:140px; height:140px;">
+                    <circle cx="70" cy="70" r="@r" fill="none" stroke="var(--surface-2)" stroke-width="18" />
+                    @foreach (var seg in segments)
+                    {
+                        <circle cx="70" cy="70" r="@r" fill="none" stroke="@seg.Color" stroke-width="18"
+                                stroke-dasharray="@(seg.Dash.ToString("0.##")) @((C - seg.Dash).ToString("0.##"))"
+                                stroke-dashoffset="@(seg.Offset.ToString("0.##"))"
+                                transform="rotate(-90 70 70)" stroke-linecap="butt"
+                                data-tt="<b>@seg.Label</b> · @seg.Value vehicles (@(seg.Pct.ToString("0.#"))%)" style="cursor:pointer;" />
+                    }
+                    @Html.Raw($"<text x=\"70\" y=\"66\" text-anchor=\"middle\" font-size=\"26\" font-weight=\"800\" fill=\"var(--ink-1)\">{total}</text>")
+                    @Html.Raw("<text x=\"70\" y=\"84\" text-anchor=\"middle\" font-size=\"10.5\" fill=\"var(--ink-3)\">vehicles</text>")
+                </svg>
+                <div class="viz-tooltip"></div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px; flex:1;">
+                @foreach (var seg in segments)
+                {
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                        <span style="display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:var(--ink-2);">
+                            <span style="width:9px;height:9px;border-radius:3px;background:@seg.Color;flex:none;"></span>@seg.Label
+                        </span>
+                        <span class="mono" style="font-size:12.5px; font-weight:700;">@seg.Value</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-12">
+    <div class="card card-pad col-7" data-viz>
+        <div class="panel-head">
+            <div>
+                <div class="panel-title">Distance by vehicle category</div>
+                <div class="panel-sub">Sum of logged trip distance, by category</div>
+            </div>
+        </div>
+        @if (catData.Count == 0)
+        {
+            <div class="empty-state">@Html.Raw(IconLibrary.Get("route"))<strong>No trip distance logged yet</strong><span>Complete some trips to see this breakdown.</span></div>
+        }
+        else
+        {
+            <div style="display:flex; flex-direction:column; gap:14px;">
+                @foreach (var c in catData)
+                {
+                    <div>
+                        <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:6px;">
+                            <span style="font-weight:650; color:var(--ink-1);">@c.Category</span>
+                            <span class="mono text-muted">@c.Km.ToString("N0") km</span>
+                        </div>
+                        <div style="height:10px; border-radius:99px; background:var(--surface-2); overflow:hidden;">
+                            <div style="height:100%; width:@((c.Km / maxCat * 100).ToString("0.#"))%; border-radius:99px; background:@c.Color;"
+                                 data-tt="<b>@c.Category</b> · @c.Km.ToString("N0") km"></div>
+                        </div>
+                    </div>
+                }
+                <div class="viz-tooltip"></div>
+            </div>
+            <div class="chart-legend">
+                @foreach (var c in catData)
+                {
+                    <div class="chart-legend__item"><span class="chart-legend__swatch" style="background:@c.Color;"></span>@c.Category</div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="card card-pad col-5">
+        <div class="panel-head">
+            <div class="panel-title">Notifications</div>
+            <a href="/Alerts" style="font-size:12px; font-weight:650; color:var(--brand-600);">View all</a>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:2px; max-height:230px; overflow-y:auto;">
+            @foreach (var n in Model.Notifications)
+            {
+                var sevClass = n.Severity switch { "Critical" => "pill-critical", "Serious" => "pill-serious", "Warning" => "pill-warning", _ => "pill-good" };
+                <div class="notif-item @(n.Unread ? "unread" : "")">
+                    <div class="notif-item__icon @sevClass">@Html.Raw(IconLibrary.Get(n.IconType))</div>
+                    <div>
+                        <div style="font-size:12.5px; font-weight:650;">@n.Title</div>
+                        <div style="font-size:11.5px; color:var(--ink-3); margin-top:1px;">@n.Detail</div>
+                        <div style="font-size:10.5px; color:var(--ink-3); margin-top:3px;">@n.CreatedAt.ToTimeAgo()</div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-12" style="margin-top:18px;">
+    <div class="card card-pad col-7">
+        <div class="panel-head">
+            <div>
+                <div class="panel-title">Vehicles needing attention</div>
+                <div class="panel-sub">Lowest health score first</div>
+            </div>
+            <a href="/Vehicles" style="font-size:12px; font-weight:650; color:var(--brand-600);">Go to Vehicle Management</a>
+        </div>
+        @if (Model.AttentionVehicles.Count == 0)
+        {
+            <div class="empty-state">@Html.Raw(IconLibrary.Get("check-circle"))<strong>Fleet is healthy</strong><span>No vehicle currently needs attention.</span></div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead><tr><th>Vehicle</th><th>Status</th><th>Health</th><th class="num">Odometer</th></tr></thead>
+                    <tbody>
+                        @foreach (var v in Model.AttentionVehicles)
+                        {
+                            var pill = v.Status switch { "Active" => "pill-good", "Maintenance" => "pill-warning", "Out of Service" => "pill-critical", _ => "pill-neutral" };
+                            <tr class="row-clickable" onclick="location.href='/Vehicles?Search=@v.PlateNumber'" style="cursor:pointer;" title="Open @v.PlateNumber in Vehicle Management">
+                                <td>
+                                    <div class="row-flag">
+                                        <div class="row-flag__icon">@Html.Raw(IconLibrary.Get("vehicle"))</div>
+                                        <div class="row-flag__meta">
+                                            <span class="row-primary">@v.PlateNumber</span>
+                                            <span>@v.Make @v.Model</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="pill @pill"><span class="dot"></span>@v.Status</span></td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <div class="meter @(v.HealthScore < 60 ? "critical" : v.HealthScore < 80 ? "warning" : "")" style="width:64px;"><div class="meter__fill" style="width:@(v.HealthScore)%;"></div></div>
+                                        <span class="mono" style="font-size:12px;">@v.HealthScore</span>
+                                    </div>
+                                </td>
+                                <td class="num mono">@v.OdometerKm.ToString("N0") km</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="card card-pad col-5">
+        <div class="panel-head">
+            <div class="panel-title">Recent activity</div>
+        </div>
+        @if (Model.RecentActivity.Count == 0)
+        {
+            <div class="empty-state">@Html.Raw(IconLibrary.Get("clock"))<strong>No activity yet</strong></div>
+        }
+        else
+        {
+            <div class="timeline">
+                @foreach (var a in Model.RecentActivity)
+                {
+                    var (bg, fg) = a.IconType switch
+                    {
+                        "alert-triangle" or "alert-octagon" => ("var(--status-critical-tint)", "var(--status-critical)"),
+                        "wrench" => ("var(--status-warning-tint)", "var(--status-warning)"),
+                        "fuel" => ("var(--accent-blue-tint)", "var(--accent-blue-600)"),
+                        "driver" => ("var(--status-serious-tint)", "var(--status-serious)"),
+                        _ => ("var(--brand-50)", "var(--brand-600)")
+                    };
+                    <div class="timeline-item">
+                        <div class="timeline-item__icon" style="background:@bg; color:@fg;">@Html.Raw(IconLibrary.Get(a.IconType))</div>
+                        <div class="timeline-item__body">
+                            <p>@a.Text</p>
+                            <time>@a.Actor · @a.OccurredAt.ToTimeAgo()</time>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
