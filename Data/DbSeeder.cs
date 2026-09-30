@@ -16,7 +16,20 @@ public static class DbSeeder
         // Each section is guarded independently so that if one table is ever emptied on its
         // own (e.g. every account removed via Users & Roles), a restart repairs just that
         // section instead of silently staying broken because "Vehicles" still has rows.
-        if (!await db.Vehicles.AnyAsync())
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
+        var vehiclesExist = await db.Vehicles.AnyAsync();
+        if (vehiclesExist && !await db.Trips.AnyAsync())
+        {
+            // A previous seed attempt inserted vehicles/drivers but crashed before finishing
+            // (e.g. a data error later in the same batch). Clear the partial state and redo it
+            // atomically rather than leaving the fleet data permanently half-seeded.
+            db.Vehicles.RemoveRange(db.Vehicles);
+            db.Drivers.RemoveRange(db.Drivers);
+            await db.SaveChangesAsync();
+            vehiclesExist = false;
+        }
+        if (!vehiclesExist)
         {
             await SeedFleetDataAsync(db);
         }
@@ -29,6 +42,8 @@ public static class DbSeeder
             db.Settings.Add(new AppSettings());
             await db.SaveChangesAsync();
         }
+
+        await transaction.CommitAsync();
     }
 
     private static async Task SeedFleetDataAsync(FleetDbContext db)
@@ -87,18 +102,18 @@ public static class DbSeeder
 
         // ---------- Trips ----------
         db.Trips.AddRange(
-            new Trip { TripCode = "TRP-5501", Vehicle = v2201, Driver = elena, Origin = "Central Garage", Destination = "Downtown Loop A", StartTime = new DateTime(2026, 7, 12, 6, 10, 0), DistanceKm = 18.4, Status = "In Progress", Purpose = "Scheduled Transit Route" },
-            new Trip { TripCode = "TRP-5502", Vehicle = v2233, Driver = priya, Origin = "Harbor Terminal", Destination = "Sector 9 Collection Loop", StartTime = new DateTime(2026, 7, 12, 5, 30, 0), DistanceKm = 27.1, Status = "In Progress", Purpose = "Waste Collection" },
-            new Trip { TripCode = "TRP-5503", Vehicle = v2285, Driver = tomas, Origin = "Harbor Terminal", Destination = "City Hall Annex", StartTime = new DateTime(2026, 7, 12, 8, 0, 0), DistanceKm = 9.8, Status = "In Progress", Purpose = "Courier Run" },
-            new Trip { TripCode = "TRP-5498", Vehicle = v2214, Driver = marcus, Origin = "North Depot", Destination = "Riverside Storage", StartTime = new DateTime(2026, 7, 11, 13, 20, 0), EndTime = new DateTime(2026, 7, 11, 14, 55, 0), DistanceKm = 41.2, FuelUsedL = 6.1, Status = "Completed", Purpose = "Equipment Transfer" },
-            new Trip { TripCode = "TRP-5497", Vehicle = v2241, Driver = sana, Origin = "Central Garage", Destination = "Regional Court", StartTime = new DateTime(2026, 7, 11, 9, 5, 0), EndTime = new DateTime(2026, 7, 11, 10, 10, 0), DistanceKm = 15.6, FuelUsedL = 1.2, Status = "Completed", Purpose = "Official Business" },
-            new Trip { TripCode = "TRP-5496", Vehicle = v2278, Driver = dara, Origin = "Riverside Yard", Destination = "Patrol Sector 4", StartTime = new DateTime(2026, 7, 11, 7, 0, 0), EndTime = new DateTime(2026, 7, 11, 15, 0, 0), DistanceKm = 96.4, FuelUsedL = 11.8, Status = "Completed", Purpose = "Patrol Shift" },
-            new Trip { TripCode = "TRP-5495", Vehicle = v2291, Driver = grace, Origin = "Harbor Terminal", Destination = "Sector 3 Collection Loop", StartTime = new DateTime(2026, 7, 11, 5, 30, 0), EndTime = new DateTime(2026, 7, 11, 11, 15, 0), DistanceKm = 52.3, FuelUsedL = 19.4, Status = "Completed", Purpose = "Waste Collection" },
-            new Trip { TripCode = "TRP-5490", Vehicle = v2304, Driver = liam, Origin = "North Depot", Destination = "Airport Liaison Office", StartTime = new DateTime(2026, 7, 10, 11, 0, 0), EndTime = new DateTime(2026, 7, 10, 12, 40, 0), DistanceKm = 38.9, FuelUsedL = 2.6, Status = "Completed", Purpose = "Official Business" },
-            new Trip { TripCode = "TRP-5489", Vehicle = v2262, Driver = owen, Origin = "North Depot", Destination = "Depot Yard B", StartTime = new DateTime(2026, 7, 10, 9, 0, 0), Status = "Delayed", Purpose = "Fleet Reposition" },
-            new Trip { TripCode = "TRP-5510", Vehicle = v2256, Driver = noor, Origin = "Central Garage", Destination = "Downtown Loop C", StartTime = new DateTime(2026, 7, 13, 6, 0, 0), Status = "Scheduled", Purpose = "Scheduled Transit Route" },
-            new Trip { TripCode = "TRP-5511", Vehicle = v2214, Driver = marcus, Origin = "North Depot", Destination = "Central Garage", StartTime = new DateTime(2026, 7, 13, 9, 30, 0), Status = "Scheduled", Purpose = "Equipment Transfer" },
-            new Trip { TripCode = "TRP-5485", Vehicle = v2278, Driver = dara, Origin = "Riverside Yard", Destination = "Patrol Sector 2", StartTime = new DateTime(2026, 7, 9, 7, 0, 0), EndTime = new DateTime(2026, 7, 9, 15, 10, 0), DistanceKm = 88.1, FuelUsedL = 10.9, Status = "Cancelled", Purpose = "Patrol Shift" }
+            new Trip { TripCode = "TRP-5501", Vehicle = v2201, Driver = elena, Origin = "Central Garage", Destination = "Downtown Loop A", StartTime = new DateTime(2026, 7, 12, 6, 10, 0, DateTimeKind.Utc), DistanceKm = 18.4, Status = "In Progress", Purpose = "Scheduled Transit Route" },
+            new Trip { TripCode = "TRP-5502", Vehicle = v2233, Driver = priya, Origin = "Harbor Terminal", Destination = "Sector 9 Collection Loop", StartTime = new DateTime(2026, 7, 12, 5, 30, 0, DateTimeKind.Utc), DistanceKm = 27.1, Status = "In Progress", Purpose = "Waste Collection" },
+            new Trip { TripCode = "TRP-5503", Vehicle = v2285, Driver = tomas, Origin = "Harbor Terminal", Destination = "City Hall Annex", StartTime = new DateTime(2026, 7, 12, 8, 0, 0, DateTimeKind.Utc), DistanceKm = 9.8, Status = "In Progress", Purpose = "Courier Run" },
+            new Trip { TripCode = "TRP-5498", Vehicle = v2214, Driver = marcus, Origin = "North Depot", Destination = "Riverside Storage", StartTime = new DateTime(2026, 7, 11, 13, 20, 0, DateTimeKind.Utc), EndTime = new DateTime(2026, 7, 11, 14, 55, 0, DateTimeKind.Utc), DistanceKm = 41.2, FuelUsedL = 6.1, Status = "Completed", Purpose = "Equipment Transfer" },
+            new Trip { TripCode = "TRP-5497", Vehicle = v2241, Driver = sana, Origin = "Central Garage", Destination = "Regional Court", StartTime = new DateTime(2026, 7, 11, 9, 5, 0, DateTimeKind.Utc), EndTime = new DateTime(2026, 7, 11, 10, 10, 0, DateTimeKind.Utc), DistanceKm = 15.6, FuelUsedL = 1.2, Status = "Completed", Purpose = "Official Business" },
+            new Trip { TripCode = "TRP-5496", Vehicle = v2278, Driver = dara, Origin = "Riverside Yard", Destination = "Patrol Sector 4", StartTime = new DateTime(2026, 7, 11, 7, 0, 0, DateTimeKind.Utc), EndTime = new DateTime(2026, 7, 11, 15, 0, 0, DateTimeKind.Utc), DistanceKm = 96.4, FuelUsedL = 11.8, Status = "Completed", Purpose = "Patrol Shift" },
+            new Trip { TripCode = "TRP-5495", Vehicle = v2291, Driver = grace, Origin = "Harbor Terminal", Destination = "Sector 3 Collection Loop", StartTime = new DateTime(2026, 7, 11, 5, 30, 0, DateTimeKind.Utc), EndTime = new DateTime(2026, 7, 11, 11, 15, 0, DateTimeKind.Utc), DistanceKm = 52.3, FuelUsedL = 19.4, Status = "Completed", Purpose = "Waste Collection" },
+            new Trip { TripCode = "TRP-5490", Vehicle = v2304, Driver = liam, Origin = "North Depot", Destination = "Airport Liaison Office", StartTime = new DateTime(2026, 7, 10, 11, 0, 0, DateTimeKind.Utc), EndTime = new DateTime(2026, 7, 10, 12, 40, 0, DateTimeKind.Utc), DistanceKm = 38.9, FuelUsedL = 2.6, Status = "Completed", Purpose = "Official Business" },
+            new Trip { TripCode = "TRP-5489", Vehicle = v2262, Driver = owen, Origin = "North Depot", Destination = "Depot Yard B", StartTime = new DateTime(2026, 7, 10, 9, 0, 0, DateTimeKind.Utc), Status = "Delayed", Purpose = "Fleet Reposition" },
+            new Trip { TripCode = "TRP-5510", Vehicle = v2256, Driver = noor, Origin = "Central Garage", Destination = "Downtown Loop C", StartTime = new DateTime(2026, 7, 13, 6, 0, 0, DateTimeKind.Utc), Status = "Scheduled", Purpose = "Scheduled Transit Route" },
+            new Trip { TripCode = "TRP-5511", Vehicle = v2214, Driver = marcus, Origin = "North Depot", Destination = "Central Garage", StartTime = new DateTime(2026, 7, 13, 9, 30, 0, DateTimeKind.Utc), Status = "Scheduled", Purpose = "Equipment Transfer" },
+            new Trip { TripCode = "TRP-5485", Vehicle = v2278, Driver = dara, Origin = "Riverside Yard", Destination = "Patrol Sector 2", StartTime = new DateTime(2026, 7, 9, 7, 0, 0, DateTimeKind.Utc), EndTime = new DateTime(2026, 7, 9, 15, 10, 0, DateTimeKind.Utc), DistanceKm = 88.1, FuelUsedL = 10.9, Status = "Cancelled", Purpose = "Patrol Shift" }
         );
 
         // ---------- Fuel records ----------
@@ -133,16 +148,16 @@ public static class DbSeeder
 
         // ---------- Alerts ----------
         db.Alerts.AddRange(
-            new AlertItem { Vehicle = v2278, Driver = dara, Type = "Overspeeding", Severity = "Critical", Message = "Sustained 118 km/h in a 90 km/h zone for 40s", Timestamp = new DateTime(2026, 7, 12, 9, 42, 0), Status = "New", Location = "Route 9, Patrol Sector 4" },
-            new AlertItem { Vehicle = v2214, Driver = marcus, Type = "Accident", Severity = "Critical", Message = "Airbag deployment signal received from telematics unit", Timestamp = new DateTime(2026, 7, 12, 8, 15, 0), Status = "Acknowledged", Location = "Junction of 5th & Alder" },
-            new AlertItem { Vehicle = v2262, Type = "Offline", Severity = "Serious", Message = "GPS device unresponsive for 3h 20m", Timestamp = new DateTime(2026, 7, 12, 6, 5, 0), Status = "New", Location = "North Depot" },
-            new AlertItem { Vehicle = v2262, Type = "MaintenanceDue", Severity = "Serious", Message = "Critical engine inspection overdue by 2 days", Timestamp = new DateTime(2026, 7, 10, 7, 0, 0), Status = "New", Location = "North Depot" },
-            new AlertItem { Vehicle = v2262, Type = "DocumentExpiry", Severity = "Warning", Message = "Registration expires in 25 days", Timestamp = new DateTime(2026, 7, 10, 6, 0, 0), Status = "Acknowledged", Location = "North Depot" },
-            new AlertItem { Vehicle = v2233, Driver = priya, Type = "LowFuel", Severity = "Warning", Message = "Fuel level at 11% — below reserve threshold", Timestamp = new DateTime(2026, 7, 12, 7, 55, 0), Status = "New", Location = "Sector 9 Collection Loop" },
-            new AlertItem { Vehicle = v2285, Driver = tomas, Type = "GeofenceExit", Severity = "Warning", Message = "Exited approved courier corridor geofence", Timestamp = new DateTime(2026, 7, 12, 8, 30, 0), Status = "Resolved", Location = "City Hall Annex" },
-            new AlertItem { Vehicle = v2233, Driver = priya, Type = "Overspeeding", Severity = "Serious", Message = "102 km/h in a 70 km/h collection route", Timestamp = new DateTime(2026, 7, 11, 14, 2, 0), Status = "Resolved", Location = "Sector 3 Collection Loop" },
-            new AlertItem { Vehicle = v2233, Driver = priya, Type = "MaintenanceDue", Severity = "Warning", Message = "Tire rotation due within 7 days", Timestamp = new DateTime(2026, 7, 9, 9, 0, 0), Status = "Acknowledged", Location = "Riverside Yard" },
-            new AlertItem { Vehicle = v2291, Driver = grace, Type = "LowFuel", Severity = "Good", Message = "Refuelled — fuel level restored to 96%", Timestamp = new DateTime(2026, 7, 9, 6, 10, 0), Status = "Resolved", Location = "Harbor Terminal Pump" }
+            new AlertItem { Vehicle = v2278, Driver = dara, Type = "Overspeeding", Severity = "Critical", Message = "Sustained 118 km/h in a 90 km/h zone for 40s", Timestamp = new DateTime(2026, 7, 12, 9, 42, 0, DateTimeKind.Utc), Status = "New", Location = "Route 9, Patrol Sector 4" },
+            new AlertItem { Vehicle = v2214, Driver = marcus, Type = "Accident", Severity = "Critical", Message = "Airbag deployment signal received from telematics unit", Timestamp = new DateTime(2026, 7, 12, 8, 15, 0, DateTimeKind.Utc), Status = "Acknowledged", Location = "Junction of 5th & Alder" },
+            new AlertItem { Vehicle = v2262, Type = "Offline", Severity = "Serious", Message = "GPS device unresponsive for 3h 20m", Timestamp = new DateTime(2026, 7, 12, 6, 5, 0, DateTimeKind.Utc), Status = "New", Location = "North Depot" },
+            new AlertItem { Vehicle = v2262, Type = "MaintenanceDue", Severity = "Serious", Message = "Critical engine inspection overdue by 2 days", Timestamp = new DateTime(2026, 7, 10, 7, 0, 0, DateTimeKind.Utc), Status = "New", Location = "North Depot" },
+            new AlertItem { Vehicle = v2262, Type = "DocumentExpiry", Severity = "Warning", Message = "Registration expires in 25 days", Timestamp = new DateTime(2026, 7, 10, 6, 0, 0, DateTimeKind.Utc), Status = "Acknowledged", Location = "North Depot" },
+            new AlertItem { Vehicle = v2233, Driver = priya, Type = "LowFuel", Severity = "Warning", Message = "Fuel level at 11% — below reserve threshold", Timestamp = new DateTime(2026, 7, 12, 7, 55, 0, DateTimeKind.Utc), Status = "New", Location = "Sector 9 Collection Loop" },
+            new AlertItem { Vehicle = v2285, Driver = tomas, Type = "GeofenceExit", Severity = "Warning", Message = "Exited approved courier corridor geofence", Timestamp = new DateTime(2026, 7, 12, 8, 30, 0, DateTimeKind.Utc), Status = "Resolved", Location = "City Hall Annex" },
+            new AlertItem { Vehicle = v2233, Driver = priya, Type = "Overspeeding", Severity = "Serious", Message = "102 km/h in a 70 km/h collection route", Timestamp = new DateTime(2026, 7, 11, 14, 2, 0, DateTimeKind.Utc), Status = "Resolved", Location = "Sector 3 Collection Loop" },
+            new AlertItem { Vehicle = v2233, Driver = priya, Type = "MaintenanceDue", Severity = "Warning", Message = "Tire rotation due within 7 days", Timestamp = new DateTime(2026, 7, 9, 9, 0, 0, DateTimeKind.Utc), Status = "Acknowledged", Location = "Riverside Yard" },
+            new AlertItem { Vehicle = v2291, Driver = grace, Type = "LowFuel", Severity = "Good", Message = "Refuelled — fuel level restored to 96%", Timestamp = new DateTime(2026, 7, 9, 6, 10, 0, DateTimeKind.Utc), Status = "Resolved", Location = "Harbor Terminal Pump" }
         );
 
         // ---------- Geofences ----------
@@ -166,13 +181,13 @@ public static class DbSeeder
 
         // ---------- Audit log ----------
         db.AuditLog.AddRange(
-            new AuditLogItem { Actor = "Alicia Ferreira", Action = "Updated role permissions", Target = "Role: Dispatcher", OccurredAt = new DateTime(2026, 7, 12, 9, 14, 0), IpAddress = "10.24.3.11" },
-            new AuditLogItem { Actor = "Ben Okafor", Action = "Approved maintenance request", Target = "MMTA-2229 · M-3301", OccurredAt = new DateTime(2026, 7, 12, 8, 2, 0), IpAddress = "10.24.3.44" },
-            new AuditLogItem { Actor = "System", Action = "Auto-suspended driver — safety score below threshold", Target = "Noor Haddad", OccurredAt = new DateTime(2026, 7, 11, 22, 10, 0), IpAddress = "—" },
-            new AuditLogItem { Actor = "Carmen Ruiz", Action = "Reassigned vehicle to depot", Target = "MMTA-2262 → North Depot", OccurredAt = new DateTime(2026, 7, 11, 16, 47, 0), IpAddress = "10.24.3.19" },
-            new AuditLogItem { Actor = "Ingrid Sørensen", Action = "Exported compliance report", Target = "Q2 Fleet Utilization.pdf", OccurredAt = new DateTime(2026, 7, 11, 14, 20, 0), IpAddress = "10.24.4.02" },
-            new AuditLogItem { Actor = "Henry Walsh", Action = "Acknowledged critical alert", Target = "MMTA-2214 accident alert", OccurredAt = new DateTime(2026, 7, 12, 8, 16, 0), IpAddress = "10.24.3.28" },
-            new AuditLogItem { Actor = "Alicia Ferreira", Action = "Invited new user", Target = "marcus.webb@mmta.gov", OccurredAt = new DateTime(2026, 7, 10, 11, 5, 0), IpAddress = "10.24.3.11" }
+            new AuditLogItem { Actor = "Alicia Ferreira", Action = "Updated role permissions", Target = "Role: Dispatcher", OccurredAt = new DateTime(2026, 7, 12, 9, 14, 0, DateTimeKind.Utc), IpAddress = "10.24.3.11" },
+            new AuditLogItem { Actor = "Ben Okafor", Action = "Approved maintenance request", Target = "MMTA-2229 · M-3301", OccurredAt = new DateTime(2026, 7, 12, 8, 2, 0, DateTimeKind.Utc), IpAddress = "10.24.3.44" },
+            new AuditLogItem { Actor = "System", Action = "Auto-suspended driver — safety score below threshold", Target = "Noor Haddad", OccurredAt = new DateTime(2026, 7, 11, 22, 10, 0, DateTimeKind.Utc), IpAddress = "—" },
+            new AuditLogItem { Actor = "Carmen Ruiz", Action = "Reassigned vehicle to depot", Target = "MMTA-2262 → North Depot", OccurredAt = new DateTime(2026, 7, 11, 16, 47, 0, DateTimeKind.Utc), IpAddress = "10.24.3.19" },
+            new AuditLogItem { Actor = "Ingrid Sørensen", Action = "Exported compliance report", Target = "Q2 Fleet Utilization.pdf", OccurredAt = new DateTime(2026, 7, 11, 14, 20, 0, DateTimeKind.Utc), IpAddress = "10.24.4.02" },
+            new AuditLogItem { Actor = "Henry Walsh", Action = "Acknowledged critical alert", Target = "MMTA-2214 accident alert", OccurredAt = new DateTime(2026, 7, 12, 8, 16, 0, DateTimeKind.Utc), IpAddress = "10.24.3.28" },
+            new AuditLogItem { Actor = "Alicia Ferreira", Action = "Invited new user", Target = "marcus.webb@mmta.gov", OccurredAt = new DateTime(2026, 7, 10, 11, 5, 0, DateTimeKind.Utc), IpAddress = "10.24.3.11" }
         );
 
         // ---------- Recent activity ----------
