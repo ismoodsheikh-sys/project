@@ -46,7 +46,27 @@ public static class DbSeeder
         var liam = new Driver { Name = "Liam Fischer", Initials = "LF", LicenseNumber = "DL-94471", LicenseClass = "Class C", LicenseExpiry = new DateOnly(2027, 6, 25), Phone = "(415) 555-0153", Email = "liam.fischer@mmta.gov", Status = "Active", TripsCompleted = 210, TotalDistanceKm = 15300, SafetyScore = 85, Rating = 4.3, YearsExperience = 1, Depot = "North Depot" };
         var noor = new Driver { Name = "Noor Haddad", Initials = "NH", LicenseNumber = "DL-68820", LicenseClass = "Class B (Transit)", LicenseExpiry = new DateOnly(2026, 7, 18), Phone = "(415) 555-0161", Email = "noor.haddad@mmta.gov", Status = "Suspended", TripsCompleted = 640, TotalDistanceKm = 58900, SafetyScore = 68, Rating = 3.6, YearsExperience = 3, Depot = "Central Garage" };
         var owen = new Driver { Name = "Owen Bright", Initials = "OB", LicenseNumber = "DL-40217", LicenseClass = "Class C", LicenseExpiry = new DateOnly(2027, 2, 4), Phone = "(415) 555-0138", Email = "owen.bright@mmta.gov", Status = "Off Duty", TripsCompleted = 305, TotalDistanceKm = 27400, SafetyScore = 89, Rating = 4.5, YearsExperience = 2, Depot = "Riverside Yard" };
-        db.Drivers.AddRange(elena, marcus, priya, sana, dara, tomas, grace, liam, noor, owen);
+        // Drivers can already exist even when Vehicles is empty (e.g. every vehicle was
+        // deleted, cascading out Trips/Fuel/Maintenance, while Drivers was untouched).
+        // Reuse existing rows by email instead of re-inserting, or SaveChanges below throws
+        // a unique-index violation on Email.
+        var existingDrivers = await db.Drivers.ToDictionaryAsync(d => d.Email);
+        async Task<Driver> EnsureDriver(Driver seed)
+        {
+            if (existingDrivers.TryGetValue(seed.Email, out var existing)) return existing;
+            db.Drivers.Add(seed);
+            return seed;
+        }
+        elena = await EnsureDriver(elena);
+        marcus = await EnsureDriver(marcus);
+        priya = await EnsureDriver(priya);
+        sana = await EnsureDriver(sana);
+        dara = await EnsureDriver(dara);
+        tomas = await EnsureDriver(tomas);
+        grace = await EnsureDriver(grace);
+        liam = await EnsureDriver(liam);
+        noor = await EnsureDriver(noor);
+        owen = await EnsureDriver(owen);
         await db.SaveChangesAsync();
 
         // ---------- Vehicles ----------

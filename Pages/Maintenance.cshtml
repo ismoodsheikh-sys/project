@@ -26,18 +26,21 @@
 </div>
 
 <div class="grid grid-12" style="margin-bottom:18px;">
-    <div class="card stat-tile col-3">
+    <a class="card stat-tile col-3" href="/Maintenance?StatusFilter=Overdue" title="View overdue maintenance">
         <div class="stat-tile__top"><span class="stat-tile__label">Overdue</span><div class="stat-tile__icon" style="background:var(--status-critical-tint); color:var(--status-critical);">@Html.Raw(IconLibrary.Get("alert-triangle"))</div></div>
         <div class="stat-tile__value tabular">@Model.OverdueCount</div>
-    </div>
-    <div class="card stat-tile col-3">
+        <div class="stat-tile__foot"><span class="stat-tile__link">View →</span></div>
+    </a>
+    <a class="card stat-tile col-3" href="/Maintenance?StatusFilter=In Progress" title="View maintenance in progress">
         <div class="stat-tile__top"><span class="stat-tile__label">In progress</span><div class="stat-tile__icon" style="background:var(--status-warning-tint); color:var(--status-warning);">@Html.Raw(IconLibrary.Get("wrench"))</div></div>
         <div class="stat-tile__value tabular">@Model.InProgressCount</div>
-    </div>
-    <div class="card stat-tile col-3">
+        <div class="stat-tile__foot"><span class="stat-tile__link">View →</span></div>
+    </a>
+    <a class="card stat-tile col-3" href="/Maintenance?StatusFilter=Scheduled" title="View scheduled maintenance">
         <div class="stat-tile__top"><span class="stat-tile__label">Scheduled</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("calendar"))</div></div>
         <div class="stat-tile__value tabular">@Model.ScheduledCount</div>
-    </div>
+        <div class="stat-tile__foot"><span class="stat-tile__link">View →</span></div>
+    </a>
     <div class="card stat-tile col-3">
         <div class="stat-tile__top"><span class="stat-tile__label">Cost (MTD)</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("credit-card"))</div></div>
         <div class="stat-tile__value tabular">$@Model.MtdCost.ToString("N0")</div>

@@ -15,6 +15,8 @@ public class VehiclesModel(FleetDbContext db) : PageModel
     public string? StatusFilter { get; set; }
     [BindProperty(SupportsGet = true)]
     public string? CategoryFilter { get; set; }
+    [BindProperty(SupportsGet = true)]
+    public bool ExpiringOnly { get; set; }
 
     public List<Vehicle> Vehicles { get; set; } = [];
     public List<Driver> AllDrivers { get; set; } = [];
@@ -23,6 +25,7 @@ public class VehiclesModel(FleetDbContext db) : PageModel
     public int ActiveCount { get; set; }
     public int MaintenanceCount { get; set; }
     public int ExpiringSoonCount { get; set; }
+    public string? AddError { get; set; }
 
     private IQueryable<Vehicle> BuildQuery()
     {
@@ -40,11 +43,20 @@ public class VehiclesModel(FleetDbContext db) : PageModel
         {
             query = query.Where(v => v.Category == CategoryFilter);
         }
+        if (ExpiringOnly)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            query = query.Where(v =>
+                (v.InsuranceExpiry.DayNumber - today.DayNumber >= 0 && v.InsuranceExpiry.DayNumber - today.DayNumber <= 30) ||
+                (v.RegistrationExpiry.DayNumber - today.DayNumber >= 0 && v.RegistrationExpiry.DayNumber - today.DayNumber <= 30));
+        }
         return query;
     }
 
-    public async Task OnGetAsync()
+    public async Task OnGetAsync(string? addError)
     {
+        AddError = addError is { Length: > 0 } plate ? $"A vehicle with plate number \"{plate}\" is already registered. Use a different plate number." : null;
+
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         Vehicles = await BuildQuery().OrderBy(v => v.PlateNumber).ToListAsync();
@@ -75,6 +87,11 @@ public class VehiclesModel(FleetDbContext db) : PageModel
         string plateNumber, string make, string model, int year, string category, string vin,
         string fuelType, string depot, string gpsDeviceId, DateOnly registrationExpiry, DateOnly insuranceExpiry)
     {
+        if (await db.Vehicles.AnyAsync(v => v.PlateNumber == plateNumber))
+        {
+            return RedirectToPage(new { Search, StatusFilter, CategoryFilter, addError = plateNumber });
+        }
+
         db.Vehicles.Add(new Vehicle
         {
             PlateNumber = plateNumber, Make = make, Model = model, Year = year, Category = category, Vin = vin,

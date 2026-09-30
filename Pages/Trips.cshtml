@@ -27,22 +27,25 @@
 </div>
 
 <div class="grid grid-12" style="margin-bottom:18px;">
-    <div class="card stat-tile col-3">
+    <a class="card stat-tile col-3" href="/Trips?StatusFilter=In Progress" title="View trips in progress">
         <div class="stat-tile__top"><span class="stat-tile__label">In progress</span><div class="stat-tile__icon" style="background:var(--accent-blue-tint); color:var(--accent-blue-600);">@Html.Raw(IconLibrary.Get("navigation"))</div></div>
         <div class="stat-tile__value tabular">@Model.InProgressCount</div>
-    </div>
-    <div class="card stat-tile col-3">
+        <div class="stat-tile__foot"><span class="stat-tile__link">View →</span></div>
+    </a>
+    <a class="card stat-tile col-3" href="/Trips?StatusFilter=Scheduled" title="View scheduled trips">
         <div class="stat-tile__top"><span class="stat-tile__label">Scheduled</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("calendar"))</div></div>
         <div class="stat-tile__value tabular">@Model.ScheduledCount</div>
-    </div>
+        <div class="stat-tile__foot"><span class="stat-tile__link">View →</span></div>
+    </a>
     <div class="card stat-tile col-3">
         <div class="stat-tile__top"><span class="stat-tile__label">Distance in progress</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("route"))</div></div>
         <div class="stat-tile__value tabular">@Model.DistanceInProgress.ToString("0.#") <span style="font-size:1rem;color:var(--ink-3);">km</span></div>
     </div>
-    <div class="card stat-tile col-3">
+    <a class="card stat-tile col-3" href="/Trips?StatusFilter=Completed" title="View completed trips">
         <div class="stat-tile__top"><span class="stat-tile__label">Completed yesterday</span><div class="stat-tile__icon" style="background:var(--status-good-tint); color:var(--status-good);">@Html.Raw(IconLibrary.Get("check-circle"))</div></div>
         <div class="stat-tile__value tabular">@Model.CompletedYesterdayCount</div>
-    </div>
+        <div class="stat-tile__foot"><span class="stat-tile__link">View →</span></div>
+    </a>
 </div>
 
 <div class="card card-pad">

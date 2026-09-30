@@ -15,6 +15,8 @@ public class DriversModel(FleetDbContext db) : PageModel
     public string? StatusFilter { get; set; }
     [BindProperty(SupportsGet = true)]
     public string? DepotFilter { get; set; }
+    [BindProperty(SupportsGet = true)]
+    public bool ExpiringOnly { get; set; }
 
     public List<Driver> Drivers { get; set; } = [];
     public Dictionary<int, Vehicle> AssignedVehicleByDriver { get; set; } = [];
@@ -24,6 +26,7 @@ public class DriversModel(FleetDbContext db) : PageModel
     public double AvgSafety { get; set; }
     public int ExpiringLicenses { get; set; }
     public string? DeleteError { get; set; }
+    public string? AddError { get; set; }
 
     private IQueryable<Driver> BuildQuery()
     {
@@ -41,12 +44,18 @@ public class DriversModel(FleetDbContext db) : PageModel
         {
             query = query.Where(d => d.Depot == DepotFilter);
         }
+        if (ExpiringOnly)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            query = query.Where(d => d.LicenseExpiry.DayNumber - today.DayNumber >= 0 && d.LicenseExpiry.DayNumber - today.DayNumber <= 30);
+        }
         return query;
     }
 
-    public async Task OnGetAsync(string? deleteError)
+    public async Task OnGetAsync(string? deleteError, string? addError)
     {
         DeleteError = deleteError is { Length: > 0 } name ? $"Can't remove {name} — they have trip history on record. Set their status to Suspended instead if they should no longer drive." : null;
+        AddError = addError is { Length: > 0 } dup ? $"A driver with that license number or email (\"{dup}\") is already registered. Use different details." : null;
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -77,6 +86,11 @@ public class DriversModel(FleetDbContext db) : PageModel
 
     public async Task<IActionResult> OnPostAddAsync(string name, string licenseNumber, string licenseClass, string phone, string email, string depot, DateOnly licenseExpiry)
     {
+        if (await db.Drivers.AnyAsync(d => d.LicenseNumber == licenseNumber || d.Email == email))
+        {
+            return RedirectToPage(new { Search, StatusFilter, DepotFilter, addError = licenseNumber });
+        }
+
         var initials = string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(p => p[0])).ToUpperInvariant();
         db.Drivers.Add(new Driver
         {

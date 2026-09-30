@@ -43,15 +43,23 @@
     <div>
         <div class="crumb">@Html.Raw(IconLibrary.Get("analytics")) Intelligence</div>
         <h1>Analytics &amp; Reports</h1>
-        <div class="page-header__meta"><span>Live from SQL Server</span> · <span>Fleet Operations Division</span></div>
+        <div class="page-header__meta"><span>Live from SQL Server</span> · <span>Fleet Operations Division</span> · <span>@Model.PeriodRangeLabel</span></div>
     </div>
     <div class="page-header__actions">
-        <button class="chip active">@Html.Raw(IconLibrary.Get("calendar")) This quarter</button>
+        <div class="dropdown">
+            <button class="chip active" data-dropdown-toggle="period-menu">@Html.Raw(IconLibrary.Get("calendar")) @Model.PeriodLabel @Html.Raw(IconLibrary.Get("chevron-down"))</button>
+            <div class="dropdown-menu" id="period-menu">
+                <a class="dropdown-item@(Model.Period == "day" ? " active" : "")" href="?period=day">Daily (today)</a>
+                <a class="dropdown-item@(Model.Period == "week" ? " active" : "")" href="?period=week">Weekly (this week)</a>
+                <a class="dropdown-item@(Model.Period == "month" ? " active" : "")" href="?period=month">Monthly (this month)</a>
+                <a class="dropdown-item@(Model.Period == "quarter" ? " active" : "")" href="?period=quarter">Quarterly (this quarter)</a>
+            </div>
+        </div>
         <div class="dropdown">
             <button class="btn btn-primary" data-dropdown-toggle="export-menu">@Html.Raw(IconLibrary.Get("download")) Export report @Html.Raw(IconLibrary.Get("chevron-down"))</button>
             <div class="dropdown-menu" id="export-menu">
                 <button type="button" class="dropdown-item" onclick="window.print()">@Html.Raw(IconLibrary.Get("file-text")) Save as PDF (print dialog)</button>
-                <a class="dropdown-item" href="?handler=Export">@Html.Raw(IconLibrary.Get("layers")) Export as Excel</a>
+                <a class="dropdown-item" href="?handler=Export&period=@Model.Period">@Html.Raw(IconLibrary.Get("layers")) Export as Excel</a>
                 <button type="button" class="dropdown-item" onclick="window.print()">@Html.Raw(IconLibrary.Get("printer")) Print report</button>
             </div>
         </div>

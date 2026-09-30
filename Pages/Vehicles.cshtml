@@ -20,6 +20,11 @@
     string[] categories = ["All", "Transit Bus", "Utility Van", "Patrol SUV", "Refuse Truck", "Sedan", "Motorcycle", "Light Truck"];
 }
 
+@if (Model.AddError != null)
+{
+    <div class="pill pill-critical" style="margin-bottom:16px; padding:8px 12px;">@Html.Raw(IconLibrary.Get("alert-triangle")) @Model.AddError</div>
+}
+
 <div class="page-header">
     <div>
         <div class="crumb">@Html.Raw(IconLibrary.Get("vehicle")) Fleet Operations</div>
@@ -35,22 +40,26 @@
 </div>
 
 <div class="grid grid-12" style="margin-bottom:18px;">
-    <div class="card stat-tile col-3">
+    <a class="card stat-tile col-3" href="/Vehicles" title="View all vehicles">
         <div class="stat-tile__top"><span class="stat-tile__label">Total fleet</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("vehicle"))</div></div>
         <div class="stat-tile__value tabular">@Model.TotalCount</div>
-    </div>
-    <div class="card stat-tile col-3">
+        <div class="stat-tile__foot"><span class="stat-tile__link">View all →</span></div>
+    </a>
+    <a class="card stat-tile col-3" href="/Vehicles?StatusFilter=Active" title="View active vehicles">
         <div class="stat-tile__top"><span class="stat-tile__label">Active</span><div class="stat-tile__icon">@Html.Raw(IconLibrary.Get("zap"))</div></div>
         <div class="stat-tile__value tabular">@Model.ActiveCount</div>
-    </div>
-    <div class="card stat-tile col-3">
+        <div class="stat-tile__foot"><span class="stat-tile__link">View →</span></div>
+    </a>
+    <a class="card stat-tile col-3" href="/Vehicles?StatusFilter=Maintenance" title="View vehicles in maintenance">
         <div class="stat-tile__top"><span class="stat-tile__label">In maintenance</span><div class="stat-tile__icon" style="background:var(--status-warning-tint); color:var(--status-warning);">@Html.Raw(IconLibrary.Get("wrench"))</div></div>
         <div class="stat-tile__value tabular">@Model.MaintenanceCount</div>
-    </div>
-    <div class="card stat-tile col-3">
+        <div class="stat-tile__foot"><span class="stat-tile__link">View →</span></div>
+    </a>
+    <a class="card stat-tile col-3" href="/Vehicles?ExpiringOnly=true" title="View vehicles with documents expiring soon">
         <div class="stat-tile__top"><span class="stat-tile__label">Docs expiring soon</span><div class="stat-tile__icon" style="background:var(--status-critical-tint); color:var(--status-critical);">@Html.Raw(IconLibrary.Get("file-text"))</div></div>
         <div class="stat-tile__value tabular">@Model.ExpiringSoonCount</div>
-    </div>
+        <div class="stat-tile__foot"><span class="stat-tile__link">View →</span></div>
+    </a>
 </div>
 
 <div class="card card-pad">

@@ -11,6 +11,8 @@ public class AlertsModel(FleetDbContext db) : PageModel
     public string? TypeFilter { get; set; }
     [BindProperty(SupportsGet = true)]
     public string? StatusFilter { get; set; }
+    [BindProperty(SupportsGet = true)]
+    public string? SeverityFilter { get; set; }
 
     public List<Models.AlertItem> Alerts { get; set; } = [];
     public int CriticalCount { get; set; }
@@ -29,6 +31,10 @@ public class AlertsModel(FleetDbContext db) : PageModel
         {
             query = query.Where(a => a.Status == StatusFilter);
         }
+        if (!string.IsNullOrWhiteSpace(SeverityFilter) && SeverityFilter != "All")
+        {
+            query = query.Where(a => a.Severity == SeverityFilter);
+        }
         Alerts = await query.OrderByDescending(a => a.Timestamp).ToListAsync();
 
         CriticalCount = await db.Alerts.CountAsync(a => a.Severity == "Critical" && a.Status != "Resolved");
@@ -45,7 +51,7 @@ public class AlertsModel(FleetDbContext db) : PageModel
             alert.Status = status;
             await db.SaveChangesAsync();
         }
-        return RedirectToPage(new { TypeFilter, StatusFilter });
+        return RedirectToPage(new { TypeFilter, StatusFilter, SeverityFilter });
     }
 
     public async Task<IActionResult> OnPostAcknowledgeAllAsync()
@@ -53,6 +59,6 @@ public class AlertsModel(FleetDbContext db) : PageModel
         var newAlerts = await db.Alerts.Where(a => a.Status == "New").ToListAsync();
         foreach (var a in newAlerts) a.Status = "Acknowledged";
         await db.SaveChangesAsync();
-        return RedirectToPage(new { TypeFilter, StatusFilter });
+        return RedirectToPage(new { TypeFilter, StatusFilter, SeverityFilter });
     }
 }
